@@ -41,3 +41,19 @@ target_link_libraries(
   PRIVATE
     tensorstore::tensorstore tensorstore::all_drivers
 )
+
+find_package(Threads QUIET)
+if (Threads_FOUND)
+    if (CMAKE_USE_PTHREADS_INIT)
+		SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
+    endif (CMAKE_USE_PTHREADS_INIT)
+    list(APPEND Build_LIBRARIES ${CMAKE_THREAD_LIBS_INIT})
+else ()
+	message(STATUS "Unable to find threads. Nyxus must have a threading library i.e. pthreads.")
+endif ()
+
+target_link_libraries(
+  test_pyrgen
+  PRIVATE
+    ${Build_LIBRARIES}
+)

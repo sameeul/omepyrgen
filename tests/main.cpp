@@ -11,6 +11,7 @@ void test_zarr_pyramid_writer(){
     auto t1 = std::chrono::high_resolution_clock::now();
     zpw.CreateBaseZarrImage();
     //zpw.CreateBaseZarrImageV2();
+    zpw.CreatePyramidImages();
     auto t2 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> et1 = t2-t1;
     std::cout << "time for base image: "<< et1.count() << std::endl;
