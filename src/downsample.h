@@ -1,8 +1,9 @@
-// helper function
+#pragma once
+
 #include<vector>
 #include<memory>
 #include<cmath>
-
+// helper function to downsample as an average
 template <typename T>
 std::unique_ptr<std::vector<T>>DownsampleAverage(std::vector<T>& source_array, std::int64_t row, std::int64_t col) {
   auto new_row = static_cast<std::int64_t>(ceil(row / 2.0));

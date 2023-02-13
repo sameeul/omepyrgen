@@ -22,6 +22,11 @@
 #include "tensorstore/kvstore/kvstore.h"
 #include "tensorstore/open.h"
 
+#include <nlohmann/json.hpp>
+using json = nlohmann::json;
+
+#include <filesystem>
+namespace fs = std::filesystem;
 
 using ::tensorstore::Context;
 using ::tensorstore::internal_zarr::ChooseBaseDType;
@@ -68,8 +73,8 @@ void ZarrPyramidWriter::CreateBaseZarrImage(){
                             }},
                             {"metadata", {
                                           {"zarr_format", 2},
-                                          {"shape", {_base_length, _base_width}},
-                                          {"chunks", {chunk_size, chunk_size}},
+                                          {"shape", {1, _base_length, _base_width}},
+                                          {"chunks", {1, chunk_size, chunk_size}},
                                           {"dtype", base_zarr_dtype.encoded_dtype},
                                           },
                             }},
@@ -98,8 +103,9 @@ void ZarrPyramidWriter::CreateBaseZarrImage(){
                                                 
                               // initiate write
                               tensorstore::Write(array, store2 |
-                                  tensorstore::Dims(0).ClosedInterval(x_start,x_end-1) |
-                                  tensorstore::Dims(1).ClosedInterval(y_start,y_end-1)).value();     
+                                  tensorstore::Dims(0).ClosedInterval(0,0) |
+                                  tensorstore::Dims(1).ClosedInterval(x_start,x_end-1) |
+                                  tensorstore::Dims(2).ClosedInterval(y_start,y_end-1)).value();     
 
       });       
 
@@ -175,8 +181,9 @@ void ZarrPyramidWriter::CreateBaseZarrImageV2(){
                                                 
                               // initiate write
                               tensorstore::Write(array, store2 |
-                                  tensorstore::Dims(0).ClosedInterval(x_start,x_end-1) |
-                                  tensorstore::Dims(1).ClosedInterval(y_start,y_end-1)).value();     
+                                  tensorstore::Dims(0).ClosedInterval(0,0) |
+                                  tensorstore::Dims(1).ClosedInterval(x_start,x_end-1) |
+                                  tensorstore::Dims(2).ClosedInterval(y_start,y_end-1)).value();    
 
         return 0.0;
       })); 
@@ -202,11 +209,44 @@ void ZarrPyramidWriter::CreatePyramidImages()
     for (int i=_max_level; i>_min_level; --i){
       std::string input_path = _output_file + "/" + std::to_string(i) + "/";
       std::string output_path = _output_file + "/" + std::to_string(i-1) + "/";
-      WriteDownsampledImage(input_path, output_path);
+      WriteDownsampledImage<uint16_t>(input_path, output_path);
   }
 }
+void ZarrPyramidWriter::WriteMultiscaleMetadata()
+{
+  json zarr_multiscale_axes;
+  zarr_multiscale_axes = json::parse(R"([
+                {"name": "z", "type": "space", "unit": "micrometer"},
+                {"name": "y", "type": "space", "unit": "micrometer"},
+                {"name": "x", "type": "space", "unit": "micrometer"}
+            ])");
+  
+ 
+  float level = 1.0;
+  json scale_metadata_list = json::array();
+  for(int i=_max_level; i>=_min_level; i--){
+    json scale_metadata;
+    scale_metadata["path"] = std::to_string(i);
+    scale_metadata["coordinateTransformations"] = {{{"type", "scale"}, {"scale", {1.0, level, level}}}};
+    scale_metadata_list.push_back(scale_metadata);
+    level = level*2;
+  }
 
-void ZarrPyramidWriter::WriteDownsampledImage(std::string& base_file, std::string& downsampled_file) {
+  json combined_metadata;
+  combined_metadata["datasets"] = scale_metadata_list;
+  combined_metadata["version"] = "0.4";
+  combined_metadata["axes"] = zarr_multiscale_axes;
+  combined_metadata["name"] = fs::path(_input_file).filename();
+  combined_metadata["metadata"] = {{"method", "mean"}};
+  json final_formated_metadata;
+  final_formated_metadata["multiscales"] = {combined_metadata};
+  std::ofstream f(_output_file + "/.zattrs",std::ios_base::trunc |std::ios_base::out);
+  f << final_formated_metadata;
+
+}
+template <typename T>
+void ZarrPyramidWriter::WriteDownsampledImage(std::string &base_file, std::string &downsampled_file)
+{
   tensorstore::Context context = Context::Default();
   TENSORSTORE_CHECK_OK_AND_ASSIGN(auto store1, tensorstore::Open({{"driver", "zarr"},
                           {"kvstore", {{"driver", "file"},
@@ -224,8 +264,8 @@ void ZarrPyramidWriter::WriteDownsampledImage(std::string& base_file, std::strin
 
   TENSORSTORE_CHECK_OK_AND_ASSIGN(auto base_zarr_dtype,
                                      ChooseBaseDType(store1.dtype()));
-  auto prev_x_max = static_cast<std::int64_t>(shape[0]);
-  auto prev_y_max = static_cast<std::int64_t>(shape[1]);
+  auto prev_x_max = static_cast<std::int64_t>(shape[1]);
+  auto prev_y_max = static_cast<std::int64_t>(shape[2]);
 
   auto cur_x_max = static_cast<std::int64_t>(ceil(prev_x_max/2.0));
   auto cur_y_max = static_cast<std::int64_t>(ceil(prev_y_max/2.0));
@@ -244,8 +284,8 @@ void ZarrPyramidWriter::WriteDownsampledImage(std::string& base_file, std::strin
                           }},
                           {"metadata", {
                                         {"zarr_format", 2},
-                                        {"shape", {cur_x_max, cur_y_max}},
-                                        {"chunks", {chunk_size, chunk_size}},
+                                        {"shape", {1, cur_x_max, cur_y_max}},
+                                        {"chunks", {1, chunk_size, chunk_size}},
                                         {"dtype", base_zarr_dtype.encoded_dtype},
                                         },
                           }},
@@ -265,24 +305,25 @@ void ZarrPyramidWriter::WriteDownsampledImage(std::string& base_file, std::strin
       auto prev_y_start = 2*y_start;
       auto prev_y_end = std::min({2*y_end, prev_y_max});
 
-      _th_pool.submit([store1, store2, x_start, x_end, y_start, y_end, prev_x_start, prev_x_end, prev_y_start, prev_y_end](){  
-                    std::vector<uint16_t> read_buffer((prev_x_end-prev_x_start)*(prev_y_end-prev_y_start));
+      _th_pool.push_task([store1, store2, x_start, x_end, y_start, y_end, prev_x_start, prev_x_end, prev_y_start, prev_y_end](){  
+                    std::vector<T> read_buffer((prev_x_end-prev_x_start)*(prev_y_end-prev_y_start));
                     auto array = tensorstore::Array(read_buffer.data(), {prev_x_end-prev_x_start, prev_y_end-prev_y_start}, tensorstore::c_order);
 
-                    tensorstore::Read(store1 | 
-                            tensorstore::Dims(0).ClosedInterval(prev_x_start,prev_x_end-1) |
-                            tensorstore::Dims(1).ClosedInterval(prev_y_start,prev_y_end-1) ,
+                    tensorstore::Read(store1 |
+                            tensorstore::Dims(0).ClosedInterval(0,0) | 
+                            tensorstore::Dims(1).ClosedInterval(prev_x_start,prev_x_end-1) |
+                            tensorstore::Dims(2).ClosedInterval(prev_y_start,prev_y_end-1) ,
                             tensorstore::UnownedToShared(array)).value();
 
-                    auto resutl = DownsampleAverage(read_buffer, (prev_x_end-prev_x_start), (prev_y_end-prev_y_start));
-                    auto result_array = tensorstore::Array(resutl->data(), {x_end-x_start, y_end-y_start}, tensorstore::c_order);
+                    auto result = DownsampleAverage(read_buffer, (prev_x_end-prev_x_start), (prev_y_end-prev_y_start));
+                    auto result_array = tensorstore::Array(result->data(), {x_end-x_start, y_end-y_start}, tensorstore::c_order);
                     tensorstore::Write(tensorstore::UnownedToShared(result_array), store2 |
-                        tensorstore::Dims(0).ClosedInterval(x_start,x_end-1) |
-                        tensorstore::Dims(1).ClosedInterval(y_start,y_end-1)).value();     
+                        tensorstore::Dims(0).ClosedInterval(0,0) | 
+                        tensorstore::Dims(1).ClosedInterval(x_start,x_end-1) |
+                        tensorstore::Dims(2).ClosedInterval(y_start,y_end-1)).value();     
 
       }); 
     }
   }
   _th_pool.wait_for_tasks();
 }
-

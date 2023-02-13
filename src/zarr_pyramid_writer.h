@@ -21,6 +21,7 @@ public:
     void CreateBaseZarrImageV2();
     void CreatePyramidImages();
     void WriteMultiscaleMetadata();
+    template<typename T>
     void WriteDownsampledImage(std::string& base_file, std::string& downsampled_file);
 private:
     std::int64_t _base_length, _base_width, chunk_size = 1024;

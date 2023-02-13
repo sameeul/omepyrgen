@@ -12,11 +12,11 @@ void test_zarr_pyramid_writer(){
     zpw.CreateBaseZarrImage();
     //zpw.CreateBaseZarrImageV2();
     zpw.CreatePyramidImages();
+    zpw.WriteMultiscaleMetadata();
     auto t2 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> et1 = t2-t1;
     std::cout << "time for base image: "<< et1.count() << std::endl;
 }
-
 
 int main(){
     std::cout<<"hello"<<std::endl;
