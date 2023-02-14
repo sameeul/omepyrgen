@@ -52,6 +52,18 @@ else ()
 	message(STATUS "Unable to find threads. Nyxus must have a threading library i.e. pthreads.")
 endif ()
 
+# Python bindings.
+find_package(pybind11 CONFIG REQUIRED)
+pybind11_add_module(libomepyrgen 
+  ${SOURCE}
+  src/python/pyramid_python_interface.cpp
+)
+
+target_compile_definitions(libomepyrgen PRIVATE WITH_PYTHON_H)
+target_link_libraries(libomepyrgen PRIVATE stdc++fs)
+target_link_libraries(libomepyrgen PRIVATE tensorstore::tensorstore tensorstore::all_drivers)
+target_link_libraries(libomepyrgen PRIVATE ${Build_LIBRARIES})  
+
 target_link_libraries(
   test_pyrgen
   PRIVATE

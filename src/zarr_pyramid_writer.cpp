@@ -245,7 +245,7 @@ void ZarrPyramidWriter::WriteMultiscaleMetadata()
 
 }
 template <typename T>
-void ZarrPyramidWriter::WriteDownsampledImage(std::string &base_file, std::string &downsampled_file)
+void ZarrPyramidWriter::WriteDownsampledImage(const std::string &base_file, const std::string &downsampled_file)
 {
   tensorstore::Context context = Context::Default();
   TENSORSTORE_CHECK_OK_AND_ASSIGN(auto store1, tensorstore::Open({{"driver", "zarr"},

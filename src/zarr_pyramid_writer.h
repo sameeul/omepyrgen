@@ -12,7 +12,7 @@ struct Chunk {
 class ZarrPyramidWriter{
 
 public:
-    ZarrPyramidWriter(std::string& input_file, std::string& output_file):
+    ZarrPyramidWriter(const std::string& input_file, const std::string& output_file):
         _input_file(input_file),
         _output_file(output_file),
         _th_pool(4)
@@ -22,7 +22,7 @@ public:
     void CreatePyramidImages();
     void WriteMultiscaleMetadata();
     template<typename T>
-    void WriteDownsampledImage(std::string& base_file, std::string& downsampled_file);
+    void WriteDownsampledImage(const std::string& base_file, const std::string& downsampled_file);
 private:
     std::int64_t _base_length, _base_width, chunk_size = 1024;
     int _max_level, _min_level;
