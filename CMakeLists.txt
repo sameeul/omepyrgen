@@ -32,8 +32,6 @@ FetchContent_MakeAvailable(tensorstore)
 
 # Define a target that depends on TensorStore...
 
-
-#include_directories("/mnt/hdd8/axle/dev/ts_cmake/test_proj/build/_deps")
 include_directories(lib/pugixml)
 include_directories(lib/bs_threadpool)
 target_link_libraries(
@@ -53,7 +51,9 @@ else ()
 endif ()
 
 # Python bindings.
-find_package(pybind11 CONFIG REQUIRED)
+# PyBind
+add_subdirectory(lib/pybind11)
+
 pybind11_add_module(libomepyrgen 
   ${SOURCE}
   src/python/pyramid_python_interface.cpp

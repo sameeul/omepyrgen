@@ -32,7 +32,6 @@ using ::tensorstore::Context;
 using ::tensorstore::internal_zarr::ChooseBaseDType;
 using namespace std::chrono_literals;
 
-
 void ZarrPyramidWriter::CreateBaseZarrImage(){
   
   
@@ -44,8 +43,8 @@ void ZarrPyramidWriter::CreateBaseZarrImage(){
                             },
                             {"context", {
                               {"cache_pool", {{"total_bytes_limit", 1000000000}}},
-                              {"data_copy_concurrency", {{"limit", 4}}},
-                              {"file_io_concurrency", {{"limit", 4}}},
+                              {"data_copy_concurrency", {{"limit", 8}}},
+                              {"file_io_concurrency", {{"limit", 8}}},
                             }},
                             },
                             //context,
@@ -68,8 +67,8 @@ void ZarrPyramidWriter::CreateBaseZarrImage(){
                             },
                             {"context", {
                               {"cache_pool", {{"total_bytes_limit", 1000000000}}},
-                              {"data_copy_concurrency", {{"limit", 4}}},
-                              {"file_io_concurrency", {{"limit", 4}}},
+                              {"data_copy_concurrency", {{"limit", 8}}},
+                              {"file_io_concurrency", {{"limit", 8}}},
                             }},
                             {"metadata", {
                                           {"zarr_format", 2},
@@ -101,12 +100,11 @@ void ZarrPyramidWriter::CreateBaseZarrImage(){
                                         tensorstore::Dims(4).ClosedInterval(y_start,y_end-1) ,
                                         array).value();
                                                 
-                              // initiate write
+                              //initiate write
                               tensorstore::Write(array, store2 |
                                   tensorstore::Dims(0).ClosedInterval(0,0) |
                                   tensorstore::Dims(1).ClosedInterval(x_start,x_end-1) |
-                                  tensorstore::Dims(2).ClosedInterval(y_start,y_end-1)).value();     
-
+                                  tensorstore::Dims(2).ClosedInterval(y_start,y_end-1)).value();  
       });       
 
      }
@@ -143,13 +141,13 @@ void ZarrPyramidWriter::CreateBaseZarrImageV2(){
                             },
                             {"context", {
                               {"cache_pool", {{"total_bytes_limit", 1000000000}}},
-                              {"data_copy_concurrency", {{"limit", 4}}},
-                              {"file_io_concurrency", {{"limit", 4}}},
+                              {"data_copy_concurrency", {{"limit", 8}}},
+                              {"file_io_concurrency", {{"limit", 8}}},
                             }},
                             {"metadata", {
                                           {"zarr_format", 2},
-                                          {"shape", {_base_length, _base_width}},
-                                          {"chunks", {chunk_size, chunk_size}},
+                                          {"shape", {1,_base_length, _base_width}},
+                                          {"chunks", {1, chunk_size, chunk_size}},
                                           {"dtype", base_zarr_dtype.encoded_dtype},
                                           },
                             }},

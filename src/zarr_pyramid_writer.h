@@ -23,6 +23,7 @@ public:
     void WriteMultiscaleMetadata();
     template<typename T>
     void WriteDownsampledImage(const std::string& base_file, const std::string& downsampled_file);
+
 private:
     std::int64_t _base_length, _base_width, chunk_size = 1024;
     int _max_level, _min_level;
