@@ -4,8 +4,6 @@
 // ToDo - Clean up headers
 #include <iostream>
 #include <optional>
-#include <tiffio.h>
-#include <tiffio.hxx>
 #include <sstream>
 #include "absl/algorithm/container.h"
 #include "absl/base/internal/endian.h"
