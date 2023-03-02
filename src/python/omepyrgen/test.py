@@ -1,8 +1,8 @@
 from zarr_pyramid_writer import ZarrPyramidWriter
 from time import time
 if __name__=="__main__":
-    input_file = "/mnt/hdd8/axle/data/bfio_test_images/r001_c001_z000.ome.tif"
-    output_file = "/mnt/hdd8/axle/data/bfio_test_images/r001_c001_z000_ome_zarr"
+    input_file = "/home/samee/axle/data/test_image.ome.tif"
+    output_file = "/home/samee/axle/data/test_image_ome_zarr_2"
 
     start_time = time()
     zpw = ZarrPyramidWriter(input_file, output_file )

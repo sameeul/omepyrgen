@@ -29,7 +29,7 @@ public:
     void CreateBaseZarrImage();
 
 private:
-    std::int64_t _base_length, _base_width, chunk_size = 100;
+    std::int64_t _base_length, _base_width, chunk_size = 1024;
     int _max_level, _min_level;
     std::string _input_dir, _output_file, _stitching_file;
     BS::thread_pool _th_pool;

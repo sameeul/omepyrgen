@@ -15,6 +15,7 @@ set(SOURCE
            src/ts_driver/ometiff/metadata.cc
            src/ts_driver/ometiff/driver.cc
            src/zarr_pyramid_writer.cpp
+           src/zarr_pyramid_assembler.cpp
 )
 add_executable(test_pyrgen ${SOURCE} tests/main.cpp)
 

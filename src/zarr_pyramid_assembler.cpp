@@ -4,7 +4,7 @@
 #include <regex>
 #include <vector>
 
-
+#include <unordered_set>
 #include <string>
 #include <unistd.h>
 #include <stdint.h>
@@ -105,11 +105,11 @@ void ZarrPyramidAssembler::CreateBaseZarrImage()
                                 {"kvstore", {{"driver", "tiled_tiff"},
                                             {"path", _input_dir + "/" + image_vec[0].file_name}}
                                 },
-                                {"context", {
-                                {"cache_pool", {{"total_bytes_limit", 1000000000}}},
-                                {"data_copy_concurrency", {{"limit", 8}}},
-                                {"file_io_concurrency", {{"limit", 8}}},
-                                }},
+                                // {"context", {
+                                // {"cache_pool", {{"total_bytes_limit", 1000000000}}},
+                                // {"data_copy_concurrency", {{"limit", 8}}},
+                                // {"file_io_concurrency", {{"limit", 8}}},
+                                // }},
                                 },
                                 //context,
                                 tensorstore::OpenMode::open,
@@ -132,6 +132,12 @@ void ZarrPyramidAssembler::CreateBaseZarrImage()
                                             {"shape", {1, full_image_height, full_image_width}},
                                             {"chunks", {1, chunk_size, chunk_size}},
                                             {"dtype", base_zarr_dtype.encoded_dtype},
+                                            {"compressor", {
+                                              {"id","blosc"}, 
+                                              {"cname", "zstd"}, 
+                                              {"clevel", 3}, 
+                                              {"shuffle", 2},
+                                              }},
                                             },
                                 }},
                                 //context,
@@ -139,19 +145,30 @@ void ZarrPyramidAssembler::CreateBaseZarrImage()
                                 tensorstore::OpenMode::delete_existing,
                                 tensorstore::ReadWriteMode::write).result());
 
-    int count = 0;
-    std::vector<std::vector<uint16_t>> buf(4, std::vector<uint16_t>(1090*1090));
-    for(const auto& i: image_vec){
-        int thread_index = count%4;
+    // bind mem pool with thread pool
 
-        std::string inp_path = _input_dir;
-        _th_pool.push_task([&dest, i, inp_path, thread_index, &buf](){
+    auto mem_pool = std::unordered_map<std::thread::id, std::vector<uint16_t>>();
+    for (int i; i< 4; i++){
+      _th_pool.push_task([&mem_pool](){
+        mem_pool.emplace(std::this_thread::get_id(), std::vector<uint16_t>(1080*1080));
+      });
+
+    }
+
+    _th_pool.wait_for_tasks();
+
+    for(const auto& i: image_vec){
+
+        //std::string inp_path = _input_dir;
+        _th_pool.push_task([&dest, i, &mem_pool, this](){
+        //std::cout<<"thread id "<<std::this_thread::get_id()<<std::endl;
+        //thread_set.emplace(std::this_thread::get_id());  
            //std::cout<< inp_path<<std::endl;
             //std::cout<<"filename: "<< i.file_name << " x pos: " << i.x_pos << " y pos: "<< i.y_pos<<std::endl;
         TENSORSTORE_CHECK_OK_AND_ASSIGN(auto source, tensorstore::Open({{"driver", "ometiff"},
 
                                     {"kvstore", {{"driver", "tiled_tiff"},
-                                                {"path", inp_path + "/" + i.file_name}}
+                                                {"path", this->_input_dir + "/" + i.file_name}}
                                     }},
                                     //context,
                                     tensorstore::OpenMode::open,
@@ -161,9 +178,11 @@ void ZarrPyramidAssembler::CreateBaseZarrImage()
         auto image_width = image_shape[4];
         auto image_height = image_shape[3];
         //auto buf = std::vector<uint16_t>(1090*1090);
-        auto array = tensorstore::Array(buf[thread_index].data(), {image_height, image_width}, tensorstore::c_order);
-        // auto array = tensorstore::AllocateArray({image_height, image_width},tensorstore::c_order,
-        //                                                     tensorstore::value_init, source.dtype());
+        auto& buf = mem_pool[std::this_thread::get_id()];
+        //std::cout << buf.size() << std::endl;
+        auto array = tensorstore::Array(buf.data(), {image_height, image_width}, tensorstore::c_order);
+        //auto array = tensorstore::AllocateArray({image_height, image_width},tensorstore::c_order,
+        //                                                    tensorstore::value_init, source.dtype());
         // initiate a read
         tensorstore::Read(source | 
                 tensorstore::Dims(0).ClosedInterval(0,0) |
