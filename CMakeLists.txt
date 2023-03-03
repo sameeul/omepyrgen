@@ -14,8 +14,10 @@ set(SOURCE
            src/ts_driver/tiled_tiff/tiled_tiff_key_value_store.cc
            src/ts_driver/ometiff/metadata.cc
            src/ts_driver/ometiff/driver.cc
-           src/zarr_pyramid_writer.cpp
+           src/ome_tiff_to_zarr_converter.cpp
            src/zarr_pyramid_assembler.cpp
+           src/zarr_base_to_pyr_gen.cpp
+           src/ome_tiff_to_zarr_pyramid.cpp
 )
 add_executable(test_pyrgen ${SOURCE} tests/main.cpp)
 

@@ -39,7 +39,7 @@ using ::tensorstore::internal_zarr::ChooseBaseDType;
 using namespace std::chrono_literals;
 
 
-void ZarrPyramidAssembler::CreateBaseZarrImage()
+void ZarrPyramidAssembler::CreateBaseZarrImage(BS::thread_pool& th_pool)
 {
   std::regex match_str(
       "file:\\s(\\S+);[\\s|\\S]+position:\\s\\((\\d+),\\s(\\d+)\\);[\\s|\\S]+grid:\\s\\((\\d+),\\s(\\d+)\\);");
@@ -149,18 +149,18 @@ void ZarrPyramidAssembler::CreateBaseZarrImage()
 
     auto mem_pool = std::unordered_map<std::thread::id, std::vector<uint16_t>>();
     for (int i; i< 4; i++){
-      _th_pool.push_task([&mem_pool](){
+        th_pool.push_task([&mem_pool](){
         mem_pool.emplace(std::this_thread::get_id(), std::vector<uint16_t>(1080*1080));
       });
 
     }
 
-    _th_pool.wait_for_tasks();
+    th_pool.wait_for_tasks();
 
     for(const auto& i: image_vec){
 
         //std::string inp_path = _input_dir;
-        _th_pool.push_task([&dest, i, &mem_pool, this](){
+        th_pool.push_task([&dest, i, &mem_pool, this](){
         //std::cout<<"thread id "<<std::this_thread::get_id()<<std::endl;
         //thread_set.emplace(std::this_thread::get_id());  
            //std::cout<< inp_path<<std::endl;
@@ -203,7 +203,7 @@ void ZarrPyramidAssembler::CreateBaseZarrImage()
 
     }
 
-    _th_pool.wait_for_tasks();
+    th_pool.wait_for_tasks();
 //     auto total_writes {pending_writes.size()};
 //   while(total_writes > 0){
 //     for(auto &f: pending_writes){
