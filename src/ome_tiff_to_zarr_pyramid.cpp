@@ -1,5 +1,6 @@
 #include "ome_tiff_to_zarr_pyramid.h"
-
+#include <filesystem>
+namespace fs = std::filesystem;
 
 OmeTifftoZarrPyramid::OmeTifftoZarrPyramid( const std::string& input_file, 
                                             const std::string& output_dir,
@@ -21,9 +22,11 @@ OmeTifftoZarrPyramid::OmeTifftoZarrPyramid( const std::string& input_file,
 
  
 void OmeTifftoZarrPyramid::Generate(VisType v){
-    std::string output_file_loc = _output_dir + "/" + _input_file + "_zarr";
+
+    std::string tiff_file_name = fs::path(_input_file).stem().string();
+    std::string output_file_loc = _output_dir + "/" + tiff_file_name + ".zarr";
     if (v == VisType::Viv){
-        output_file_loc = output_file_loc + "data.zarr" + "/0";
+        output_file_loc = output_file_loc + "/data.zarr/0";
     }
 
     std::string base_zarr_file = output_file_loc + "/" + std::to_string(_max_level);

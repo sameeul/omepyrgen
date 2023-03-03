@@ -58,7 +58,7 @@ void test_ome_tiff_to_zarr_pyramid_gen(){
     std::string output_dir = "/home/samee/axle/data/test_assembly_out";
     auto t1 = std::chrono::high_resolution_clock::now();
     auto zarr_pyr_gen = OmeTifftoZarrPyramid(input_tiff_file, output_dir, 1024);
-    zarr_pyr_gen.Generate(VisType::TS);
+    zarr_pyr_gen.Generate(VisType::Viv);
     auto t2 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> et1 = t2-t1;
     std::cout << "time for base image: "<< et1.count() << std::endl;
