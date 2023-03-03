@@ -14,6 +14,7 @@ class OmeTifftoZarrPyramid{
 public:
     OmeTifftoZarrPyramid(const std::string& input_file, const std::string& output_dir, int min_dim);
     void Generate(VisType v);
+    void WriteMultiscaleMetadata(VisType v);
 private:
     std::string _input_file, _output_dir;
     std::unique_ptr<OmeTiffToZarrConverter> _zpw_ptr = nullptr;

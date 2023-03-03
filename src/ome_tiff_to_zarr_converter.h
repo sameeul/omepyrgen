@@ -14,7 +14,7 @@ public:
                     BS::thread_pool& th_pool
                 );
 
-    void WriteMultiscaleMetadata();
+    
 
 
 private:

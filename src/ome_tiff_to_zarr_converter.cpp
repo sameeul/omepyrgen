@@ -126,35 +126,3 @@ void OmeTiffToZarrConverter::Convert( const std::string& input_file, const std::
 }
 
 
-void OmeTiffToZarrConverter::WriteMultiscaleMetadata()
-{
-  // json zarr_multiscale_axes;
-  // zarr_multiscale_axes = json::parse(R"([
-  //               {"name": "z", "type": "space", "unit": "micrometer"},
-  //               {"name": "y", "type": "space", "unit": "micrometer"},
-  //               {"name": "x", "type": "space", "unit": "micrometer"}
-  //           ])");
-  
- 
-  // float level = 1.0;
-  // json scale_metadata_list = json::array();
-  // for(int i=_max_level; i>=_min_level; i--){
-  //   json scale_metadata;
-  //   scale_metadata["path"] = std::to_string(i);
-  //   scale_metadata["coordinateTransformations"] = {{{"type", "scale"}, {"scale", {1.0, level, level}}}};
-  //   scale_metadata_list.push_back(scale_metadata);
-  //   level = level*2;
-  // }
-
-  // json combined_metadata;
-  // combined_metadata["datasets"] = scale_metadata_list;
-  // combined_metadata["version"] = "0.4";
-  // combined_metadata["axes"] = zarr_multiscale_axes;
-  // combined_metadata["name"] = fs::path(_input_file).filename();
-  // combined_metadata["metadata"] = {{"method", "mean"}};
-  // json final_formated_metadata;
-  // final_formated_metadata["multiscales"] = {combined_metadata};
-  // std::ofstream f(_output_file + "/.zattrs",std::ios_base::trunc |std::ios_base::out);
-  // f << final_formated_metadata;
-
-}
