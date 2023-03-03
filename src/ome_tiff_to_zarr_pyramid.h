@@ -21,5 +21,10 @@ private:
     std::unique_ptr<ZarrBaseToPyramidGen> _zpg_ptr = nullptr;
     int _max_level, _min_level;
     BS::thread_pool _th_pool;
+
+    void ExtractAndWriteXML();
+    void WriteTSZattrFile();
+    void WriteVivZattrFile();
+    void WriteVivZgroupFiles();
      
 };

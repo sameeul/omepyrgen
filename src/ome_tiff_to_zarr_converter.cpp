@@ -22,8 +22,7 @@
 #include "tensorstore/kvstore/kvstore.h"
 #include "tensorstore/open.h"
 
-#include <nlohmann/json.hpp>
-using json = nlohmann::json;
+
 
 #include <filesystem>
 namespace fs = std::filesystem;
