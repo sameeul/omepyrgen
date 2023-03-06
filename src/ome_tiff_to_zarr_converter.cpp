@@ -98,6 +98,7 @@ void OmeTiffToZarrConverter::Convert( const std::string& input_file, const std::
                             tensorstore::OpenMode::delete_existing,
                             tensorstore::ReadWriteMode::write).result());
 
+
   for(std::int64_t i=0; i<num_rows; ++i){
     std::int64_t y_start = i*_chunk_size;
     std::int64_t y_end = std::min({(i+1)*_chunk_size, _image_length});
@@ -105,21 +106,21 @@ void OmeTiffToZarrConverter::Convert( const std::string& input_file, const std::
       std::int64_t x_start = j*_chunk_size;
       std::int64_t x_end = std::min({(j+1)*_chunk_size, _image_width});
       th_pool.push_task([&store1, &store2, x_start, x_end, y_start, y_end, x_dim, y_dim](){  
-                              auto array = tensorstore::AllocateArray({y_end-y_start, x_end-x_start},tensorstore::c_order,
-                                                            tensorstore::value_init, store1.dtype());
-                              // initiate a read
-                              tensorstore::Read(store1 | 
-                                        tensorstore::Dims(3).ClosedInterval(y_start,y_end-1) |
-                                        tensorstore::Dims(4).ClosedInterval(x_start,x_end-1) ,
-                                        array).value();
-                                                
-                              //initiate write
-                              tensorstore::Write(array, store2 |
-                                  tensorstore::Dims(y_dim).ClosedInterval(y_start,y_end-1) |
-                                  tensorstore::Dims(x_dim).ClosedInterval(x_start,x_end-1)).value();  
+        auto array = tensorstore::AllocateArray({y_end-y_start, x_end-x_start},tensorstore::c_order,
+                                      tensorstore::value_init, store1.dtype());
+        // initiate a read
+        tensorstore::Read(store1 | 
+                  tensorstore::Dims(3).ClosedInterval(y_start,y_end-1) |
+                  tensorstore::Dims(4).ClosedInterval(x_start,x_end-1) ,
+                  array).value();
+                          
+        //initiate write
+        tensorstore::Write(array, store2 |
+            tensorstore::Dims(y_dim).ClosedInterval(y_start,y_end-1) |
+            tensorstore::Dims(x_dim).ClosedInterval(x_start,x_end-1)).value();  
       });       
 
-     }
+    }
   }
   th_pool.wait_for_tasks();
 }

@@ -12,9 +12,10 @@
 
 class OmeTifftoZarrPyramid{
 public:
-    OmeTifftoZarrPyramid(const std::string& input_file, const std::string& output_dir, int min_dim);
-    void Generate(VisType v);
-    void WriteMultiscaleMetadata(VisType v);
+    OmeTifftoZarrPyramid(){}
+    void GenerateFromSingleFile(const std::string& input_file, const std::string& output_dir, 
+                                int min_dim, VisType v);
+    
 private:
     std::string _input_file, _output_dir;
     std::unique_ptr<OmeTiffToZarrConverter> _zpw_ptr = nullptr;
@@ -22,9 +23,12 @@ private:
     int _max_level, _min_level;
     BS::thread_pool _th_pool;
 
-    void ExtractAndWriteXML();
-    void WriteTSZattrFile();
-    void WriteVivZattrFile();
-    void WriteVivZgroupFiles();
+    void WriteMultiscaleMetadata(   const std::string& input_file, 
+                                    const std::string& output_dir,
+                                    VisType v);
+    void ExtractAndWriteXML(const std::string& input_file, const std::string& xml_loc);
+    void WriteTSZattrFile(const std::string& tiff_file_name, const std::string& zattr_file_loc);
+    void WriteVivZattrFile(const std::string& tiff_file_name, const std::string& zattr_file_loc);
+    void WriteVivZgroupFiles(const std::string& output_dir);
      
 };
