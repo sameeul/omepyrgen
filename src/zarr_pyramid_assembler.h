@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include "utils.h"
 #include "BS_thread_pool.hpp"
 
 struct ImageSegment{
@@ -15,21 +16,20 @@ struct ImageSegment{
 
 };
 
-class ZarrPyramidAssembler{
+class OmeTiffCollToZarr{
 
 public:
-    ZarrPyramidAssembler(const std::string& input_dir,
-                         const std::string& output_file,
-                         const std::string& stitching_file):
-        _input_dir(input_dir),
-        _output_file(output_file),
-        _stitching_file(stitching_file)
-        {}
-    void CreateBaseZarrImage(BS::thread_pool& th_pool);
+    OmeTiffCollToZarr(const std::string& input_dir,
+                      const std::string& stitching_file);
+
+    void Assemble(const std::string& output_file, VisType v, BS::thread_pool& th_pool);
+    std::int64_t image_height() {return _full_image_height;}
+    std::int64_t image_width() {return _full_image_width;}
+    void GenerateOmeXML(const std::string& image_name, const std::string& output_file);
 
 private:
-    std::int64_t _base_length, _base_width, chunk_size = 1024;
-    int _max_level, _min_level;
-    std::string _input_dir, _output_file, _stitching_file;
+    std::int64_t _full_image_height, _full_image_width, _chunk_size = 1024;
+    std::string _input_dir, _stitching_file;
+    std::vector<ImageSegment> _image_vec;
 };
 

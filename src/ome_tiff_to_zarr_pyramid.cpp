@@ -26,20 +26,20 @@ void OmeTifftoZarrPyramid::GenerateFromSingleFile(  const std::string& input_fil
 
         std::string base_zarr_file = zarr_file_dir + "/" + std::to_string(_max_level);
         _zpw_ptr = std::make_unique<OmeTiffToZarrConverter>();
-        _zpg_ptr = std::make_unique<ZarrBaseToPyramidGen>(base_zarr_file, zarr_file_dir,  
-                                    _max_level, _min_level);
         std::cout << "Writing base zarr image..."<<std::endl;
         _zpw_ptr->Convert(input_file, base_zarr_file, v, _th_pool);
         std::cout << "Generating image pyramids..."<<std::endl;
+        _zpg_ptr = std::make_unique<ZarrBaseToPyramidGen>(base_zarr_file, zarr_file_dir,  
+                                    _max_level, _min_level);
         _zpg_ptr->CreatePyramidImages(v, _th_pool);
-        WriteMultiscaleMetadata(input_file, output_dir, v);
+        WriteMultiscaleMetadataForSingleFile(input_file, output_dir, v);
 
     }
 
 
 }
 
-void OmeTifftoZarrPyramid::WriteMultiscaleMetadata(const std::string& input_file , const std::string& output_dir, VisType v)
+void OmeTifftoZarrPyramid::WriteMultiscaleMetadataForSingleFile(const std::string& input_file , const std::string& output_dir, VisType v)
 {
     std::string tiff_file_name = fs::path(input_file).stem().string();
     std::string zarr_file_dir = output_dir + "/" + tiff_file_name + ".zarr";
@@ -49,6 +49,20 @@ void OmeTifftoZarrPyramid::WriteMultiscaleMetadata(const std::string& input_file
     } else if (v == VisType::Viv){
         ExtractAndWriteXML(input_file, zarr_file_dir);
         WriteVivZattrFile(tiff_file_name, zarr_file_dir+"/data.zarr/0/");
+        WriteVivZgroupFiles(zarr_file_dir);
+    }
+}
+
+
+void OmeTifftoZarrPyramid::WriteMultiscaleMetadataForImageCollection(const std::string& image_file_name , const std::string& output_dir, VisType v)
+{
+    std::string zarr_file_dir = output_dir + "/" + image_file_name + ".zarr";
+    if(v == VisType::TS){
+
+        WriteTSZattrFile(image_file_name, zarr_file_dir);
+    } else if (v == VisType::Viv){
+        _tiff_coll_to_zarr_ptr->GenerateOmeXML(image_file_name, zarr_file_dir+"/METADATA.ome.xml");                   
+        WriteVivZattrFile(image_file_name, zarr_file_dir+"/data.zarr/0/");
         WriteVivZgroupFiles(zarr_file_dir);
     }
 }
@@ -64,6 +78,7 @@ void OmeTifftoZarrPyramid::WriteVivZgroupFiles(const std::string& output_loc){
         zgroup_file_2 << zgroup_text << std::endl;
     }
 }
+
 
 void OmeTifftoZarrPyramid::ExtractAndWriteXML(const std::string& input_file, const std::string& xml_loc){
     TIFF *tiff_ = TIFFOpen(input_file.c_str(), "r");
@@ -143,4 +158,35 @@ void OmeTifftoZarrPyramid::WriteVivZattrFile(const std::string& tiff_file_name, 
     }
 
     
+}
+
+
+void OmeTifftoZarrPyramid::GenerateFromCollection(
+                const std::string& collection_path, 
+                const std::string& stitch_vector_file,
+                const std::string& image_name,
+                const std::string& output_dir, 
+                int min_dim, 
+                VisType v){
+    _tiff_coll_to_zarr_ptr = std::make_unique<OmeTiffCollToZarr>(collection_path, 
+                                                        stitch_vector_file);
+    _max_level = static_cast<int>(ceil(log2(std::max({  _tiff_coll_to_zarr_ptr->image_width(), 
+                                                        _tiff_coll_to_zarr_ptr->image_height()}))));
+    _min_level = static_cast<int>(ceil(log2(min_dim)));
+    
+
+    std::string zarr_file_dir = output_dir + "/" + image_name + ".zarr";
+    if (v == VisType::Viv){
+        zarr_file_dir = zarr_file_dir + "/data.zarr/0";
+    }
+
+    std::string base_zarr_file = zarr_file_dir + "/" + std::to_string(_max_level);
+    std::cout << "Writing base zarr image..."<<std::endl;
+    _tiff_coll_to_zarr_ptr->Assemble(base_zarr_file, v, _th_pool);
+    std::cout << "Generating image pyramids..."<<std::endl;
+    _zpg_ptr = std::make_unique<ZarrBaseToPyramidGen>(base_zarr_file, zarr_file_dir,  
+                                _max_level, _min_level);
+    _zpg_ptr->CreatePyramidImages(v, _th_pool);
+    WriteMultiscaleMetadataForImageCollection(image_name, output_dir, v);
+
 }
