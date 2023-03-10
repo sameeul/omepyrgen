@@ -20,7 +20,7 @@ public:
 private:
     std::string _input_zarr_dir, _output_root_dir;
     int _max_level, _min_level;
-    std::int64_t _chunk_size = 1024;
+    std::int64_t _chunk_size = 1080;
 
     template<typename T>
     void WriteDownsampledImage(const std::string& base_file, const std::string& downsampled_file, VisType v, BS::thread_pool& th_pool);

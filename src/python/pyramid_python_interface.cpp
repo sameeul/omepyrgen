@@ -5,6 +5,6 @@ namespace py = pybind11;
 
 PYBIND11_MODULE(libomepyrgen, m) {
     py::class_<OmeTifftoZarrPyramid, std::shared_ptr<OmeTifftoZarrPyramid>>(m, "OmeTifftoZarrPyramid") \
-    .def(py::init<const std::string&, const std::string&, int >()) \
-    .def("generate_zarr_pyramid", &OmeTifftoZarrPyramid::Generate, py::call_guard<py::gil_scoped_release>());
+    .def(py::init<>()) \
+    .def("generate_zarr_pyramid", &OmeTifftoZarrPyramid::GenerateFromSingleFile, py::call_guard<py::gil_scoped_release>());
 }
