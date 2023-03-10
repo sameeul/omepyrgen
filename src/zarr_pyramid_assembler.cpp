@@ -10,17 +10,14 @@
 #include <string>
 #include <unistd.h>
 #include <stdint.h>
-#include <typeinfo>
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <type_traits>
-#include <vector>
 #include <chrono>
 #include <future>
 #include <cmath>
 #include <thread>
-#include <bits/stdc++.h>
+#include <cstdlib>
 
 #include "tensorstore/tensorstore.h"
 #include "tensorstore/context.h"
@@ -74,7 +71,7 @@ OmeTiffCollToZarr::OmeTiffCollToZarr(const std::string& input_dir,
 
           (image_x_max < x) ? image_x_max = x: image_x_max = image_x_max;  
           (image_y_max < y) ? image_y_max = y: image_y_max = image_y_max;
-          _image_vec.emplace_back(fname, x, y);   
+          _image_vec.emplace_back(fname, x, y, gx, gy);   
 
           if (gx==0 && gy ==0){
               img_00.file_name = fname;
@@ -120,6 +117,8 @@ void OmeTiffCollToZarr::Assemble(const std::string& output_file, VisType v, BS::
   }
 
   if (_image_vec.size() != 0){
+    std::list<tensorstore::WriteFutures> pending_writes;
+    size_t write_failed_count = 0;
     TENSORSTORE_CHECK_OK_AND_ASSIGN(auto test_source, tensorstore::Open({{"driver", "ometiff"},
 
                             {"kvstore", {{"driver", "tiled_tiff"},
@@ -157,9 +156,11 @@ void OmeTiffCollToZarr::Assemble(const std::string& output_file, VisType v, BS::
                                 tensorstore::OpenMode::delete_existing,
                                 tensorstore::ReadWriteMode::write).result());
 
+    auto t1 = std::chrono::high_resolution_clock::now();
     for(const auto& i: _image_vec){
+        
 
-        th_pool.push_task([&dest, i, x_dim, y_dim, this](){
+        th_pool.push_task([&dest, i, x_dim, y_dim, this, &pending_writes](){
 
         TENSORSTORE_CHECK_OK_AND_ASSIGN(auto source, tensorstore::Open({{"driver", "ometiff"},
                                     {"kvstore", {{"driver", "tiled_tiff"},
@@ -180,15 +181,61 @@ void OmeTiffCollToZarr::Assemble(const std::string& output_file, VisType v, BS::
                 tensorstore::Dims(3).ClosedInterval(0, image_height-1) |
                 tensorstore::Dims(4).ClosedInterval(0, image_width-1) ,
                 array).value();
-        
-        tensorstore::Write(array, dest |
-            tensorstore::Dims(y_dim).ClosedInterval(i.y_pos,i.y_pos+image_height-1) |
-            tensorstore::Dims(x_dim).ClosedInterval(i.x_pos,i.x_pos+image_width-1)).value();  
+
+        pending_writes.emplace_back(tensorstore::Write(array, dest |
+              tensorstore::Dims(y_dim).ClosedInterval(i.y_grid*this->_chunk_size,i.y_grid*this->_chunk_size+image_height-1) |
+              tensorstore::Dims(x_dim).ClosedInterval(i.x_grid*this->_chunk_size,i.x_grid*this->_chunk_size+image_width-1)));
+
+        //return result;  
+
         });
     }
-
+    auto t2 = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> et1 = t2-t1;
+    std::cout << "time for submitting the requests "<< et1.count() << std::endl;
     th_pool.wait_for_tasks();
+    auto t3 = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> et2 = t3-t1;
+    std::cout << "finished all reads  "<< et2.count() << std::endl;
+    size_t total_writes = pending_writes.size(); 
 
+    std::cout << "total writes " << total_writes << std::endl;
+    size_t count = 0;
+    //while( count < total_writes){
+      for (auto it = pending_writes.begin(); it != pending_writes.end();) {
+        if (it->commit_future.ready()) {
+          if (!GetStatus(it->commit_future).ok()) {
+            write_failed_count++;
+            std::cout << GetStatus(it->commit_future);
+          }
+          count++;
+          it = pending_writes.erase(it);
+        } else {
+          ++it;
+        }
+
+
+      }
+        std::cout << "Count is " << count << std::endl;
+        std::cout << "Pending writes " << pending_writes.size() << std::endl;
+
+    auto t4 = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> et3 = t4-t1;
+    std::cout << "one pass done on write requests  "<< et3.count() << std::endl;
+
+    //sleep(10);
+    for (auto& front : pending_writes) {
+      if (!GetStatus(front.commit_future).ok()) {
+        write_failed_count++;
+        std::cout << GetStatus(front.commit_future) << std::endl;
+      }
+    }
+    auto t5 = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> et4 = t5-t1;
+    std::cout << "done with all  "<< et3.count() << std::endl;
+    std::cout << "failed writes " << write_failed_count << std::endl;
+    //sleep(10);
+    //}
   }
 
 
