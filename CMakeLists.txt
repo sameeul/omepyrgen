@@ -18,6 +18,7 @@ set(SOURCE
            src/zarr_pyramid_assembler.cpp
            src/zarr_base_to_pyr_gen.cpp
            src/ome_tiff_to_zarr_pyramid.cpp
+           src/utilities.cpp
 )
 add_executable(test_pyrgen ${SOURCE} tests/main.cpp)
 

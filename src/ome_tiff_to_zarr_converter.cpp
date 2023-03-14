@@ -1,5 +1,5 @@
 #include "ome_tiff_to_zarr_converter.h"
-#include "downsample.h"
+#include "utilities.h"
 
 #include <string>
 #include <unistd.h>
@@ -23,7 +23,6 @@
 #include "tensorstore/open.h"
 
 
-
 #include <filesystem>
 namespace fs = std::filesystem;
 
@@ -32,7 +31,7 @@ using ::tensorstore::internal_zarr::ChooseBaseDType;
 using namespace std::chrono_literals;
 
 void OmeTiffToZarrConverter::Convert( const std::string& input_file, const std::string& output_file, 
-                                      VisType v,  BS::thread_pool& th_pool){
+                                      const int scale_key, const VisType v,  BS::thread_pool& th_pool){
   
   int num_dims, x_dim, y_dim;
 
@@ -41,25 +40,14 @@ void OmeTiffToZarrConverter::Convert( const std::string& input_file, const std::
     y_dim = 3;
     num_dims = 5;
   
-  } else if (v == VisType::TS){ // 3D file
+  } else if (v == VisType::TS_Zarr){ // 3D file
     x_dim = 2;
     y_dim = 1;
     num_dims = 3;
   
   }
-  //tensorstore::Context context = Context::Default();
-  TENSORSTORE_CHECK_OK_AND_ASSIGN(auto store1, tensorstore::Open({{"driver", "ometiff"},
 
-                            {"kvstore", {{"driver", "tiled_tiff"},
-                                         {"path", input_file}}
-                            },
-                            {"context", {
-                              {"cache_pool", {{"total_bytes_limit", 1000000000}}},
-                              {"data_copy_concurrency", {{"limit", 8}}},
-                              {"file_io_concurrency", {{"limit", 8}}},
-                            }},
-                            },
-                            //context,
+  TENSORSTORE_CHECK_OK_AND_ASSIGN(auto store1, tensorstore::Open(GetOmeTiffSpecToRead(input_file),
                             tensorstore::OpenMode::open,
                             tensorstore::ReadWriteMode::read).result());
 
@@ -77,23 +65,11 @@ void OmeTiffToZarrConverter::Convert( const std::string& input_file, const std::
 
   auto num_rows = static_cast<std::int64_t>(ceil(1.0*_image_length/_chunk_size));
   auto num_cols = static_cast<std::int64_t>(ceil(1.0*_image_width/_chunk_size));
-  TENSORSTORE_CHECK_OK_AND_ASSIGN(auto store2, tensorstore::Open({{"driver", "zarr"},
-                            {"kvstore", {{"driver", "file"},
-                                         {"path", output_file}}
-                            },
-                            {"context", {
-                              {"cache_pool", {{"total_bytes_limit", 1000000000}}},
-                              {"data_copy_concurrency", {{"limit", 8}}},
-                              {"file_io_concurrency", {{"limit", 8}}},
-                            }},
-                            {"metadata", {
-                                          {"zarr_format", 2},
-                                          {"shape", new_image_shape},
-                                          {"chunks", chunk_shape},
-                                          {"dtype", base_zarr_dtype.encoded_dtype},
-                                          },
-                            }},
-                            //context,
+
+  tensorstore::Spec output_spec;
+  output_spec = GetZarrSpecToWrite(output_file + "/" + std::to_string(scale_key), new_image_shape, chunk_shape, base_zarr_dtype.encoded_dtype);
+  TENSORSTORE_CHECK_OK_AND_ASSIGN(auto store2, tensorstore::Open(
+                            output_spec,
                             tensorstore::OpenMode::create |
                             tensorstore::OpenMode::delete_existing,
                             tensorstore::ReadWriteMode::write).result());

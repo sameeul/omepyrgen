@@ -1,5 +1,6 @@
 #include "zarr_base_to_pyr_gen.h"
 #include "downsample.h"
+#include "utilities.h"
 
 #include <string>
 #include <unistd.h>
@@ -59,7 +60,7 @@ void ZarrBaseToPyramidGen::WriteDownsampledImage(const std::string& base_file, c
         y_dim = 3;
         num_dims = 5;
     
-    } else if (v == VisType::TS){ // 3D file
+    } else if (v == VisType::TS_Zarr){ // 3D file
         x_dim = 2;
         y_dim = 1;
         num_dims = 3;
@@ -67,16 +68,8 @@ void ZarrBaseToPyramidGen::WriteDownsampledImage(const std::string& base_file, c
     }
 
     //tensorstore::Context context = Context::Default();
-    TENSORSTORE_CHECK_OK_AND_ASSIGN(auto store1, tensorstore::Open({{"driver", "zarr"},
-                            {"kvstore", {{"driver", "file"},
-                                            {"path", base_file}}
-                            },
-                            {"context", {
-                                {"cache_pool", {{"total_bytes_limit", 1000000000}}},
-                                {"data_copy_concurrency", {{"limit", 4}}},
-                                {"file_io_concurrency", {{"limit", 4}}},
-                            }}},
-                            //context,
+    TENSORSTORE_CHECK_OK_AND_ASSIGN(auto store1, tensorstore::Open(
+                            GetZarrSpecToRead(base_file),
                             tensorstore::OpenMode::open,
                             tensorstore::ReadWriteMode::read).result());
     auto prev_image_shape = store1.domain().shape();
@@ -103,26 +96,12 @@ void ZarrBaseToPyramidGen::WriteDownsampledImage(const std::string& base_file, c
     chunk_shape[x_dim] = _chunk_size;
 
 
-    TENSORSTORE_CHECK_OK_AND_ASSIGN(auto store2, tensorstore::Open({{"driver", "zarr"},
-                            {"kvstore", {{"driver", "file"},
-                                            {"path", downsampled_file}}
-                            },
-                            {"context", {
-                                {"cache_pool", {{"total_bytes_limit", 1000000000}}},
-                                {"data_copy_concurrency", {{"limit", 4}}},
-                                {"file_io_concurrency", {{"limit", 4}}},
-                            }},
-                            {"metadata", {
-                                            {"zarr_format", 2},
-                                            {"shape", new_image_shape},
-                                            {"chunks", chunk_shape},
-                                            {"dtype", base_zarr_dtype.encoded_dtype},
-                                            },
-                            }},
+    TENSORSTORE_CHECK_OK_AND_ASSIGN(auto store2, tensorstore::Open(
+                            GetZarrSpecToWrite(downsampled_file, new_image_shape, chunk_shape, base_zarr_dtype.encoded_dtype),
                             tensorstore::OpenMode::create |
                             tensorstore::OpenMode::delete_existing,
                             tensorstore::ReadWriteMode::write).result());
-
+    std::list<tensorstore::WriteFutures> pending_writes;
     for(std::int64_t i=0; i<num_rows; ++i){
         auto y_start = i*_chunk_size;
         auto y_end = std::min({(i+1)*_chunk_size, cur_y_max});
@@ -148,7 +127,7 @@ void ZarrBaseToPyramidGen::WriteDownsampledImage(const std::string& base_file, c
             Point cur_tl(x_start, y_start);
             Point cur_br(x_end, y_end);
 
-            th_pool.push_task([store1, store2, prev_tl, prev_br, cur_tl, cur_br, x_dim, y_dim](){  
+            th_pool.push_task([store1, store2, prev_tl, prev_br, cur_tl, cur_br, x_dim, y_dim, &pending_writes](){  
                 std::vector<T> read_buffer((prev_br.x-prev_tl.x)*(prev_br.y-prev_tl.y));
                 auto array = tensorstore::Array(read_buffer.data(), {prev_br.y-prev_tl.y, prev_br.x-prev_tl.x}, tensorstore::c_order);
 
@@ -159,12 +138,39 @@ void ZarrBaseToPyramidGen::WriteDownsampledImage(const std::string& base_file, c
 
                 auto result = DownsampleAverage(read_buffer, (prev_br.y-prev_tl.y), (prev_br.x-prev_tl.x));
                 auto result_array = tensorstore::Array(result->data(), {cur_br.y-cur_tl.y, cur_br.x-cur_tl.x}, tensorstore::c_order);
-                tensorstore::Write(tensorstore::UnownedToShared(result_array), store2 | 
+                pending_writes.emplace_back(tensorstore::Write(tensorstore::UnownedToShared(result_array), store2 | 
                     tensorstore::Dims(y_dim).ClosedInterval(cur_tl.y, cur_br.y-1) |
-                    tensorstore::Dims(x_dim).ClosedInterval(cur_tl.x, cur_br.x-1)).value();     
+                    tensorstore::Dims(x_dim).ClosedInterval(cur_tl.x, cur_br.x-1)));     
 
             }); 
         }
     }
-  th_pool.wait_for_tasks();
+    th_pool.wait_for_tasks();
+    size_t total_writes = pending_writes.size(); 
+
+    size_t count = 0, num_pass = 10;
+    size_t write_failed_count = 0;
+    while( num_pass > 0){
+        for (auto it = pending_writes.begin(); it != pending_writes.end();) {
+        if (it->commit_future.ready()) {
+            if (!GetStatus(it->commit_future).ok()) {
+            write_failed_count++;
+            std::cout << GetStatus(it->commit_future);
+            }
+            count++;
+            it = pending_writes.erase(it);
+        } else {
+            ++it;
+        }
+        }
+        --num_pass;
+    }
+
+    std::cout << "remaining stuff "<< pending_writes.size() << std::endl; 
+    // force the rest of it to finish
+    for (auto& front : pending_writes) {
+        if (!GetStatus(front.commit_future).ok()) {
+        write_failed_count++;
+        }
+    }
 }

@@ -27,7 +27,7 @@ void OmeTifftoZarrPyramid::GenerateFromSingleFile(  const std::string& input_fil
         std::string base_zarr_file = zarr_file_dir + "/" + std::to_string(_max_level);
         _zpw_ptr = std::make_unique<OmeTiffToZarrConverter>();
         std::cout << "Writing base zarr image..."<<std::endl;
-        _zpw_ptr->Convert(input_file, base_zarr_file, v, _th_pool);
+        _zpw_ptr->Convert(input_file, zarr_file_dir, _max_level, v, _th_pool);
         std::cout << "Generating image pyramids..."<<std::endl;
         _zpg_ptr = std::make_unique<ZarrBaseToPyramidGen>(base_zarr_file, zarr_file_dir,  
                                     _max_level, _min_level);
@@ -43,7 +43,7 @@ void OmeTifftoZarrPyramid::WriteMultiscaleMetadataForSingleFile(const std::strin
 {
     std::string tiff_file_name = fs::path(input_file).stem().string();
     std::string zarr_file_dir = output_dir + "/" + tiff_file_name + ".zarr";
-    if(v == VisType::TS){
+    if(v == VisType::TS_Zarr){
 
         WriteTSZattrFile(tiff_file_name, zarr_file_dir);
     } else if (v == VisType::Viv){
@@ -57,7 +57,7 @@ void OmeTifftoZarrPyramid::WriteMultiscaleMetadataForSingleFile(const std::strin
 void OmeTifftoZarrPyramid::WriteMultiscaleMetadataForImageCollection(const std::string& image_file_name , const std::string& output_dir, VisType v)
 {
     std::string zarr_file_dir = output_dir + "/" + image_file_name + ".zarr";
-    if(v == VisType::TS){
+    if(v == VisType::TS_Zarr){
 
         WriteTSZattrFile(image_file_name, zarr_file_dir);
     } else if (v == VisType::Viv){

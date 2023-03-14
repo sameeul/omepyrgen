@@ -2,7 +2,7 @@
 
 #include <string>
 #include "BS_thread_pool.hpp"
-#include "utils.h"
+#include "utilities.h"
 
 class ZarrBaseToPyramidGen{
 

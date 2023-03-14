@@ -1,5 +1,5 @@
 #include "../ome_tiff_to_zarr_pyramid.h"
-#include "../utils.h"
+#include "../utilities.h"
 #include <pybind11/pybind11.h>
 namespace py = pybind11;
 

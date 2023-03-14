@@ -4,7 +4,7 @@
 #include "../src/zarr_pyramid_assembler.h"
 #include "../src/zarr_base_to_pyr_gen.h"
 #include "../src/ome_tiff_to_zarr_pyramid.h"
-#include "../src/utils.h"
+#include "../src/utilities.h"
 #include "BS_thread_pool.hpp"
 #include<chrono>
 
@@ -12,13 +12,13 @@ void test_zarr_pyramid_writer(){
     std::string input_file = "/home/samee/axle/data/r001_c001_z000.ome.tif";
     std::string output_file = "/home/samee/axle/data/r001_c001_z000_ome_zarr";
     
-    input_file = "/home/samee/axle/data/test_image.ome.tif";
-    output_file = "/home/samee/axle/data/test_image_ome_zarr_2";
+    //input_file = "/home/samee/axle/data/test_image.ome.tif";
+    //output_file = "/home/samee/axle/data/test_image_ome_zarr_2";
 
     auto zpw = OmeTiffToZarrConverter();
     auto t1 = std::chrono::high_resolution_clock::now();
     BS::thread_pool th_pool;
-    zpw.Convert(input_file, output_file, VisType::TS ,th_pool);
+    zpw.Convert(input_file, output_file, 16, VisType::TS_Zarr ,th_pool);
     auto t2 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> et1 = t2-t1;
     std::cout << "time for base image: "<< et1.count() << std::endl;
@@ -97,10 +97,10 @@ void test_ome_tiff_coll_to_zarr_pyramid_gen_xml(){
 
 int main(){
     std::cout<<"hello"<<std::endl;
-    //test_zarr_pyramid_writer();
+    test_zarr_pyramid_writer();
     //test_zarr_pyramid_assembler();
     //test_zarr_pyramid_gen();
     //test_ome_tiff_to_zarr_pyramid_gen();
-    test_ome_tiff_coll_to_zarr_pyramid_gen();
+    //test_ome_tiff_coll_to_zarr_pyramid_gen();
     //test_ome_tiff_coll_to_zarr_pyramid_gen_xml();
 }
