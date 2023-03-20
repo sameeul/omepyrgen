@@ -44,3 +44,30 @@ tensorstore::Spec GetZarrSpecToRead(const std::string& filename){
                             }).value();
 }
 
+tensorstore::Spec GetPCNSpecToWrite(const std::string& filename, 
+                                    const std::string& scale_key,
+                                    const std::vector<std::int64_t>& image_shape, 
+                                    const std::vector<std::int64_t>& chunk_shape,
+                                    std::string_view dtype){
+    return tensorstore::Spec::FromJson({{"driver", "neuroglancer_precomputed"},
+                            {"kvstore", {{"driver", "file"},
+                                         {"path", filename}}
+                            },
+                            {"context", {
+                              {"cache_pool", {{"total_bytes_limit", 1000000000}}},
+                              {"data_copy_concurrency", {{"limit", 8}}},
+                              {"file_io_concurrency", {{"limit", 8}}},
+                            }},
+                            {"multiscale_metadata", {
+                                          {"data_type", dtype},
+                                          {"num_channels", 1},
+                                          {"type", "image"},
+                            }},
+                            {"scale_metadata", {
+                                          {"encoding", "raw"},
+                                          {"key", scale_key},
+                                          {"size", image_shape},
+                                          {"chunk_size", chunk_shape},
+                                          },
+                            }}).value();
+}

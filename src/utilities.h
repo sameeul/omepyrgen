@@ -22,3 +22,8 @@ tensorstore::Spec GetZarrSpecToWrite(   const std::string& filename,
                                         std::vector<std::int64_t>& chunk_shape,
                                         std::string& dtype);
 
+tensorstore::Spec GetPCNSpecToWrite(const std::string& filename, 
+                                    const std::string& scale_key,
+                                    const std::vector<std::int64_t>& image_shape, 
+                                    const std::vector<std::int64_t>& chunk_shape,
+                                    std::string_view dtype);
