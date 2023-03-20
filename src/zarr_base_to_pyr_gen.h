@@ -23,6 +23,7 @@ private:
     std::int64_t _chunk_size = 1080;
 
     template<typename T>
-    void WriteDownsampledImage(const std::string& base_file, const std::string& downsampled_file, VisType v, BS::thread_pool& th_pool);
+    void WriteDownsampledImage(const std::string& input_file, const std::string& input_scale_key, const std::string& output_file, const std::string& output_scale_key,
+                                                VisType v, BS::thread_pool& th_pool);
 };
 

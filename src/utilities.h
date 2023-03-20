@@ -16,14 +16,15 @@ struct Point {
 };
 
 tensorstore::Spec GetOmeTiffSpecToRead(const std::string& filename);
-tensorstore::Spec GetZarrSpecToRead(const std::string& filename);
+tensorstore::Spec GetZarrSpecToRead(const std::string& filename, const std::string& scale_key);
 tensorstore::Spec GetZarrSpecToWrite(   const std::string& filename, 
                                         std::vector<std::int64_t>& image_shape, 
                                         std::vector<std::int64_t>& chunk_shape,
                                         std::string& dtype);
-
+tensorstore::Spec GetPCNSpecToRead(const std::string& filename, const std::string& scale_key);
 tensorstore::Spec GetPCNSpecToWrite(const std::string& filename, 
                                     const std::string& scale_key,
                                     const std::vector<std::int64_t>& image_shape, 
                                     const std::vector<std::int64_t>& chunk_shape,
-                                    std::string_view dtype);
+                                    std::string_view dtype,
+                                    bool base_level);

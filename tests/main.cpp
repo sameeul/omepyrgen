@@ -8,6 +8,16 @@
 #include "BS_thread_pool.hpp"
 #include<chrono>
 
+
+#include "tensorstore/tensorstore.h"
+#include "tensorstore/context.h"
+#include "tensorstore/array.h"
+#include "tensorstore/driver/zarr/dtype.h"
+#include "tensorstore/index_space/dim_expression.h"
+#include "tensorstore/kvstore/kvstore.h"
+#include "tensorstore/open.h"
+
+
 void test_zarr_pyramid_writer(){
     std::string input_file = "/home/samee/axle/data/r001_c001_z000.ome.tif";
     std::string output_file = "/home/samee/axle/data/r001_c001_z000_ome_zarr";
@@ -18,7 +28,7 @@ void test_zarr_pyramid_writer(){
     auto zpw = OmeTiffToZarrConverter();
     auto t1 = std::chrono::high_resolution_clock::now();
     BS::thread_pool th_pool;
-    zpw.Convert(input_file, output_file, 16, VisType::TS_Zarr ,th_pool);
+    zpw.Convert(input_file, output_file, "16", VisType::TS_Zarr ,th_pool);
     auto t2 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> et1 = t2-t1;
     std::cout << "time for base image: "<< et1.count() << std::endl;
@@ -33,7 +43,7 @@ void test_zarr_pyramid_assembler()
     auto zpw = OmeTiffCollToZarr(input_dir, stitch_vector);
     auto t1 = std::chrono::high_resolution_clock::now();
     BS::thread_pool th_pool;
-    zpw.Assemble(output_file, VisType::Viv, th_pool);
+    zpw.Assemble(output_file, "17", VisType::TS_PCN, th_pool);
 
     auto t2 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> et1 = t2-t1;
@@ -59,7 +69,7 @@ void test_ome_tiff_to_zarr_pyramid_gen(){
     std::string output_dir = "/home/samee/axle/data/test_assembly_out";
     auto t1 = std::chrono::high_resolution_clock::now();
     auto zarr_pyr_gen = OmeTifftoZarrPyramid();
-    zarr_pyr_gen.GenerateFromSingleFile(input_tiff_file, output_dir, 1024, VisType::Viv);
+    zarr_pyr_gen.GenerateFromSingleFile(input_tiff_file, output_dir, 1024, VisType::TS_PCN);
     auto t2 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> et1 = t2-t1;
     std::cout << "time for base image: "<< et1.count() << std::endl;
@@ -95,12 +105,112 @@ void test_ome_tiff_coll_to_zarr_pyramid_gen_xml(){
 }
 
 
+void test_npc_write(){
+    // TENSORSTORE_CHECK_OK_AND_ASSIGN(auto store, tensorstore::Open(
+    //                         {{"driver", "neuroglancer_precomputed"},
+    //                         {"kvstore", {
+    //                             {"driver", "file"},
+    //                             {"path", "/home/samee/axle/data/test_ngs"}
+    //                         }},
+    //                         {"multiscale_metadata", {
+    //                                       {"data_type", "uint16"},
+    //                                       {"num_channels", 1},
+    //                                       {"type", "image"},
+    //                         }},
+    //                         {"scale_metadata", {
+    //                                       {"encoding", "raw"},
+    //                                       {"key", "1"},
+    //                                       {"size", {16,16,1}},
+    //                                       {"chunk_size", {4,4,1}},
+    //                         }}},
+    //                         tensorstore::OpenMode::create |
+    //                         tensorstore::OpenMode::delete_existing,
+    //                         tensorstore::ReadWriteMode::write).result());  
+
+    // std::vector<uint16_t> test_input(6);
+    // for(int i=0; i<test_input.size(); i++){
+    //     test_input[i] = i+1;
+    // }
+    // std::cout<<"printing input\n";
+    // for(auto& x: test_input){
+    //     std::cout<<x<<" ";
+    // }
+    // std::cout<<std::endl;
+
+    // auto array = tensorstore::Array(test_input.data(), {3, 2}, tensorstore::c_order);
+    // //auto array = tensorstore::MakeArray<std::uint16_t>({{1, 2, 3}, {4, 5, 6}});
+
+    // tensorstore::Write(tensorstore::UnownedToShared(array), store |tensorstore::Dims(2, 3).IndexSlice({0, 0})|
+    //     tensorstore::Dims(0).ClosedInterval(0,2) |
+    //     tensorstore::Dims(1).ClosedInterval(0,1)).value();  
+
+    TENSORSTORE_CHECK_OK_AND_ASSIGN(auto outstore, tensorstore::Open(
+                            {{"driver", "neuroglancer_precomputed"},
+                            {"kvstore", {
+                                {"driver", "file"},
+                                {"path", "/home/samee/axle/data/test_ngs"}
+                            }}},
+                            tensorstore::OpenMode::open,
+                            tensorstore::ReadWriteMode::read).result()); 
+    std::vector<uint16_t> test_output(6);
+
+    auto array2 = tensorstore::Array(test_output.data(), {3, 2}, tensorstore::fortran_order);
+    tensorstore::Read(outstore |tensorstore::Dims(2, 3).IndexSlice({0, 0})|
+        tensorstore::Dims(0).ClosedInterval(0,2) |
+        tensorstore::Dims(1).ClosedInterval(0,1), tensorstore::UnownedToShared(array2)).value();  
+    
+    std::cout<<"printing output\n";
+    for(auto& x: test_output){
+        std::cout<<x<<" ";
+    }
+    std::cout<<std::endl;
+
+    // tensorstore::Write(array, store |
+    //     tensorstore::Dims(0).ClosedInterval(0,1) |
+    //     tensorstore::Dims(1).ClosedInterval(0,1) |
+    //     tensorstore::Dims(2).ClosedInterval(0,0) |
+    //     tensorstore::Dims(3).ClosedInterval(0,0)).value();  
+}
+
+void test_zarr_write(){
+    TENSORSTORE_CHECK_OK_AND_ASSIGN(auto store, tensorstore::Open(
+                            {{"driver", "zarr"},
+                            {"kvstore", {
+                                {"driver", "file"},
+                                {"path", "/home/samee/axle/data/test_zarr"}
+                            }},
+                            {"metadata", {
+                                          {"zarr_format", 2},
+                                          {"shape", {1,1,16,16}},
+                                          {"chunks", {1,1,4,4}},
+                                          {"dtype", "<u2"},
+                                          },
+                            }},
+                            tensorstore::OpenMode::create |
+                            tensorstore::OpenMode::delete_existing,
+                            tensorstore::ReadWriteMode::write).result());  
+
+    auto array = tensorstore::MakeArray<std::uint16_t>({{1, 2}, {4, 5}});
+    // tensorstore::Write(array, store |tensorstore::Dims(2, 3).IndexSlice({0, 0})|
+    //     tensorstore::Dims(0).ClosedInterval(0,1) |
+    //     tensorstore::Dims(1).ClosedInterval(0,1)).value();  
+
+    tensorstore::Write(array, store |
+        tensorstore::Dims(2).ClosedInterval(0,1) |
+        tensorstore::Dims(3).ClosedInterval(0,1) |
+        tensorstore::Dims(0).ClosedInterval(0,0) |
+        tensorstore::Dims(1).ClosedInterval(0,0)).value();  
+}
+
+
 int main(){
     std::cout<<"hello"<<std::endl;
-    test_zarr_pyramid_writer();
+    //test_zarr_pyramid_writer();
     //test_zarr_pyramid_assembler();
     //test_zarr_pyramid_gen();
-    //test_ome_tiff_to_zarr_pyramid_gen();
+    test_ome_tiff_to_zarr_pyramid_gen();
     //test_ome_tiff_coll_to_zarr_pyramid_gen();
     //test_ome_tiff_coll_to_zarr_pyramid_gen_xml();
+    //test_npc_write();
+    //test_zarr_write();
 }

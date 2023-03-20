@@ -74,7 +74,7 @@ void OmeTiffToZarrConverter::Convert( const std::string& input_file, const std::
   if (v == VisType::TS_Zarr | v == VisType::Viv){
     output_spec = GetZarrSpecToWrite(output_file + "/" + scale_key, new_image_shape, chunk_shape, base_zarr_dtype.encoded_dtype);
   } else if (v == VisType::TS_PCN){
-    output_spec = GetPCNSpecToWrite(output_file, scale_key, new_image_shape, chunk_shape, store1.dtype().name());
+    output_spec = GetPCNSpecToWrite(output_file, scale_key, new_image_shape, chunk_shape, store1.dtype().name(), true);
   }
 
   TENSORSTORE_CHECK_OK_AND_ASSIGN(auto store2, tensorstore::Open(

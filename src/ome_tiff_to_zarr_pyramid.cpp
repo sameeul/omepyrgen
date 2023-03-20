@@ -29,7 +29,7 @@ void OmeTifftoZarrPyramid::GenerateFromSingleFile(  const std::string& input_fil
         std::cout << "Writing base zarr image..."<<std::endl;
         _zpw_ptr->Convert(input_file, zarr_file_dir, std::to_string(_max_level), v, _th_pool);
         std::cout << "Generating image pyramids..."<<std::endl;
-        _zpg_ptr = std::make_unique<ZarrBaseToPyramidGen>(base_zarr_file, zarr_file_dir,  
+        _zpg_ptr = std::make_unique<ZarrBaseToPyramidGen>(zarr_file_dir, zarr_file_dir,  
                                     _max_level, _min_level);
         _zpg_ptr->CreatePyramidImages(v, _th_pool);
         WriteMultiscaleMetadataForSingleFile(input_file, output_dir, v);
@@ -182,7 +182,7 @@ void OmeTifftoZarrPyramid::GenerateFromCollection(
 
     std::string base_zarr_file = zarr_file_dir + "/" + std::to_string(_max_level);
     std::cout << "Writing base zarr image..."<<std::endl;
-    _tiff_coll_to_zarr_ptr->Assemble(base_zarr_file, v, _th_pool);
+    _tiff_coll_to_zarr_ptr->Assemble(zarr_file_dir, std::to_string(_max_level), v, _th_pool);
     std::cout << "Generating image pyramids..."<<std::endl;
     _zpg_ptr = std::make_unique<ZarrBaseToPyramidGen>(base_zarr_file, zarr_file_dir,  
                                 _max_level, _min_level);
