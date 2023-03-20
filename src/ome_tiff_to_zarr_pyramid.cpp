@@ -27,7 +27,7 @@ void OmeTifftoZarrPyramid::GenerateFromSingleFile(  const std::string& input_fil
         std::string base_zarr_file = zarr_file_dir + "/" + std::to_string(_max_level);
         _zpw_ptr = std::make_unique<OmeTiffToZarrConverter>();
         std::cout << "Writing base zarr image..."<<std::endl;
-        _zpw_ptr->Convert(input_file, zarr_file_dir, _max_level, v, _th_pool);
+        _zpw_ptr->Convert(input_file, zarr_file_dir, std::to_string(_max_level), v, _th_pool);
         std::cout << "Generating image pyramids..."<<std::endl;
         _zpg_ptr = std::make_unique<ZarrBaseToPyramidGen>(base_zarr_file, zarr_file_dir,  
                                     _max_level, _min_level);

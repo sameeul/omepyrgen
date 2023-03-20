@@ -10,7 +10,7 @@ public:
     OmeTiffToZarrConverter(){}
     void Convert(   const std::string& input_file, 
                     const std::string& output_file,
-                    const int scale_key,  
+                    const std::string& scale_key,  
                     const VisType v,
                     BS::thread_pool& th_pool
                 );
