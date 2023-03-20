@@ -1,5 +1,5 @@
 #include "ome_tiff_to_zarr_converter.h"
-#include "downsample.h"
+#include "utilities.h"
 
 #include <string>
 #include <unistd.h>
@@ -18,10 +18,10 @@
 #include "tensorstore/context.h"
 #include "tensorstore/array.h"
 #include "tensorstore/driver/zarr/dtype.h"
+//#include "python/tensorstore/index_space.h"
 #include "tensorstore/index_space/dim_expression.h"
 #include "tensorstore/kvstore/kvstore.h"
 #include "tensorstore/open.h"
-
 
 
 #include <filesystem>
@@ -32,7 +32,7 @@ using ::tensorstore::internal_zarr::ChooseBaseDType;
 using namespace std::chrono_literals;
 
 void OmeTiffToZarrConverter::Convert( const std::string& input_file, const std::string& output_file, 
-                                      VisType v,  BS::thread_pool& th_pool){
+                                      const std::string& scale_key, const VisType v, BS::thread_pool& th_pool){
   
   int num_dims, x_dim, y_dim;
 
@@ -40,26 +40,17 @@ void OmeTiffToZarrConverter::Convert( const std::string& input_file, const std::
     x_dim = 4;
     y_dim = 3;
     num_dims = 5;
-  
-  } else if (v == VisType::TS){ // 3D file
+  } else if (v == VisType::TS_Zarr ){ // 3D file
     x_dim = 2;
     y_dim = 1;
     num_dims = 3;
-  
+  } else if (v == VisType::TS_PCN ){ // 3D file
+    x_dim = 1;
+    y_dim = 0;
+    num_dims = 3;
   }
-  //tensorstore::Context context = Context::Default();
-  TENSORSTORE_CHECK_OK_AND_ASSIGN(auto store1, tensorstore::Open({{"driver", "ometiff"},
 
-                            {"kvstore", {{"driver", "tiled_tiff"},
-                                         {"path", input_file}}
-                            },
-                            {"context", {
-                              {"cache_pool", {{"total_bytes_limit", 1000000000}}},
-                              {"data_copy_concurrency", {{"limit", 8}}},
-                              {"file_io_concurrency", {{"limit", 8}}},
-                            }},
-                            },
-                            //context,
+  TENSORSTORE_CHECK_OK_AND_ASSIGN(auto store1, tensorstore::Open(GetOmeTiffSpecToRead(input_file),
                             tensorstore::OpenMode::open,
                             tensorstore::ReadWriteMode::read).result());
 
@@ -77,27 +68,20 @@ void OmeTiffToZarrConverter::Convert( const std::string& input_file, const std::
 
   auto num_rows = static_cast<std::int64_t>(ceil(1.0*_image_length/_chunk_size));
   auto num_cols = static_cast<std::int64_t>(ceil(1.0*_image_width/_chunk_size));
-  TENSORSTORE_CHECK_OK_AND_ASSIGN(auto store2, tensorstore::Open({{"driver", "zarr"},
-                            {"kvstore", {{"driver", "file"},
-                                         {"path", output_file}}
-                            },
-                            {"context", {
-                              {"cache_pool", {{"total_bytes_limit", 1000000000}}},
-                              {"data_copy_concurrency", {{"limit", 8}}},
-                              {"file_io_concurrency", {{"limit", 8}}},
-                            }},
-                            {"metadata", {
-                                          {"zarr_format", 2},
-                                          {"shape", new_image_shape},
-                                          {"chunks", chunk_shape},
-                                          {"dtype", base_zarr_dtype.encoded_dtype},
-                                          },
-                            }},
-                            //context,
+
+  tensorstore::Spec output_spec{};
+  
+  if (v == VisType::TS_Zarr | v == VisType::Viv){
+    output_spec = GetZarrSpecToWrite(output_file + "/" + scale_key, new_image_shape, chunk_shape, base_zarr_dtype.encoded_dtype);
+  } else if (v == VisType::TS_PCN){
+    output_spec = GetPCNSpecToWrite(output_file, scale_key, new_image_shape, chunk_shape, store1.dtype().name(), true);
+  }
+
+  TENSORSTORE_CHECK_OK_AND_ASSIGN(auto store2, tensorstore::Open(
+                            output_spec,
                             tensorstore::OpenMode::create |
                             tensorstore::OpenMode::delete_existing,
                             tensorstore::ReadWriteMode::write).result());
-
 
   for(std::int64_t i=0; i<num_rows; ++i){
     std::int64_t y_start = i*_chunk_size;
@@ -105,7 +89,7 @@ void OmeTiffToZarrConverter::Convert( const std::string& input_file, const std::
     for(std::int64_t j=0; j<num_cols; ++j){
       std::int64_t x_start = j*_chunk_size;
       std::int64_t x_end = std::min({(j+1)*_chunk_size, _image_width});
-      th_pool.push_task([&store1, &store2, x_start, x_end, y_start, y_end, x_dim, y_dim](){  
+      th_pool.push_task([&store1, &store2, x_start, x_end, y_start, y_end, x_dim, y_dim, v](){  
         auto array = tensorstore::AllocateArray({y_end-y_start, x_end-x_start},tensorstore::c_order,
                                       tensorstore::value_init, store1.dtype());
         // initiate a read
@@ -115,9 +99,17 @@ void OmeTiffToZarrConverter::Convert( const std::string& input_file, const std::
                   array).value();
                           
         //initiate write
-        tensorstore::Write(array, store2 |
-            tensorstore::Dims(y_dim).ClosedInterval(y_start,y_end-1) |
-            tensorstore::Dims(x_dim).ClosedInterval(x_start,x_end-1)).value();  
+        tensorstore::IndexTransform<> transform = tensorstore::IdentityTransform(store2.domain());
+        if(v == VisType::TS_PCN){
+          transform = (std::move(transform) | tensorstore::Dims(2, 3).IndexSlice({0,0})
+                                            | tensorstore::Dims(y_dim).ClosedInterval(y_start,y_end-1) 
+                                            | tensorstore::Dims(x_dim).ClosedInterval(x_start,x_end-1)).value();
+
+        } else if (v == VisType::TS_Zarr || v == VisType::Viv) {
+          transform = (std::move(transform) | tensorstore::Dims(y_dim).ClosedInterval(y_start,y_end-1) 
+                                            | tensorstore::Dims(x_dim).ClosedInterval(x_start,x_end-1)).value();
+        } 
+        tensorstore::Write(array, store2 | transform).value();  
       });       
 
     }

@@ -1,4 +1,5 @@
 #include "zarr_pyramid_assembler.h"
+#include "utilities.h"
 #include "pugixml.hpp"
 #include "tiffio.h"
 #include <fstream>
@@ -13,7 +14,6 @@
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <chrono>
 #include <future>
 #include <cmath>
 #include <thread>
@@ -35,7 +35,6 @@ namespace fs = std::filesystem;
 
 using ::tensorstore::Context;
 using ::tensorstore::internal_zarr::ChooseBaseDType;
-using namespace std::chrono_literals;
 
 
 OmeTiffCollToZarr::OmeTiffCollToZarr(const std::string& input_dir,
@@ -49,9 +48,7 @@ OmeTiffCollToZarr::OmeTiffCollToZarr(const std::string& input_dir,
   std::string line;
   std::smatch pieces_match;
 
-  // find final image size
-  std::int64_t image_x_max=0, image_y_max=0, grid_x_max=0, grid_y_max=0; 
-  ImageSegment img_00, img_01, img_10;
+  // find final image size 
 
   std::fstream stitch_vec;
   stitch_vec.open(_stitching_file, std::ios::in);
@@ -64,44 +61,44 @@ OmeTiffCollToZarr::OmeTiffCollToZarr(const std::string& input_dir,
       if (std::regex_match(line, pieces_match, match_str)) {
         if(pieces_match.size() == 6){
           auto fname = pieces_match[1].str();
-          auto x = static_cast<std::int64_t>(std::stoi(pieces_match[2].str()));
-          auto y = static_cast<std::int64_t>(std::stoi(pieces_match[3].str()));
           auto gx = std::stoi(pieces_match[4].str());
           auto gy = std::stoi(pieces_match[5].str());
-
-          (image_x_max < x) ? image_x_max = x: image_x_max = image_x_max;  
-          (image_y_max < y) ? image_y_max = y: image_y_max = image_y_max;
-          _image_vec.emplace_back(fname, x, y, gx, gy);   
-
-          if (gx==0 && gy ==0){
-              img_00.file_name = fname;
-              img_00.x_pos = x;
-              img_00.y_pos = y;
-          }
-          if (gx==0 && gy ==1){
-              img_01.file_name = fname;
-              img_01.x_pos = x;
-              img_01.y_pos = y;
-          }
-          if (gx==1 && gy ==0){
-              img_10.file_name = fname;
-              img_10.x_pos = x;
-              img_10.y_pos = y;
-          }
+          _image_vec.emplace_back(fname, gx, gy);   
         }
       }
-
     }
 
-    _full_image_width = image_x_max + img_10.x_pos - img_00.x_pos;
-    _full_image_height = image_y_max + img_01.y_pos - img_00.y_pos;
+    if (_image_vec.size() != 0){
+      TENSORSTORE_CHECK_OK_AND_ASSIGN(auto test_source, tensorstore::Open(
+                          GetOmeTiffSpecToRead( _input_dir + "/" + _image_vec[0].file_name),
+                          tensorstore::OpenMode::open,
+                          tensorstore::ReadWriteMode::read).result());
+
+      TENSORSTORE_CHECK_OK_AND_ASSIGN(auto base_zarr_dtype,
+                                          ChooseBaseDType(test_source.dtype()));
+      auto test_image_shape = test_source.domain().shape();
+      _chunk_size_x = test_image_shape[4];
+      _chunk_size_y = test_image_shape[3];
+
+
+      int grid_x_max = 0, grid_y_max = 0;
+
+      for(auto &i: _image_vec){
+        i._x_grid > grid_x_max ? grid_x_max = i._x_grid : grid_x_max = grid_x_max;
+        i._y_grid > grid_y_max ? grid_y_max = i._x_grid : grid_y_max = grid_y_max;
+      }
+
+      _full_image_width = (grid_x_max+1)*_chunk_size_x;
+      _full_image_height = (grid_y_max+1)*_chunk_size_y;
+    }
 
   }
 }
 
-void OmeTiffCollToZarr::Assemble(const std::string& output_file, VisType v, BS::thread_pool& th_pool)
+void OmeTiffCollToZarr::Assemble(const std::string& output_file, const std::string& scale_key, VisType v, BS::thread_pool& th_pool)
 {
 
+  auto t1 = std::chrono::high_resolution_clock::now();
   int num_dims, x_dim, y_dim;
 
   if (v == VisType::Viv){ //5D file
@@ -109,63 +106,56 @@ void OmeTiffCollToZarr::Assemble(const std::string& output_file, VisType v, BS::
     y_dim = 3;
     num_dims = 5;
   
-  } else if (v == VisType::TS){ // 3D file
+  } else if (v == VisType::TS_Zarr){ // 3D file
     x_dim = 2;
     y_dim = 1;
     num_dims = 3;
   
+  } else if (v == VisType::TS_PCN ){ // 3D file
+    x_dim = 1;
+    y_dim = 0;
+    num_dims = 3;
   }
 
   if (_image_vec.size() != 0){
     std::list<tensorstore::WriteFutures> pending_writes;
     size_t write_failed_count = 0;
-    TENSORSTORE_CHECK_OK_AND_ASSIGN(auto test_source, tensorstore::Open({{"driver", "ometiff"},
 
-                            {"kvstore", {{"driver", "tiled_tiff"},
-                                        {"path", _input_dir + "/" + _image_vec[0].file_name}}
-                            },
-                            },
-                            tensorstore::OpenMode::open,
-                            tensorstore::ReadWriteMode::read).result());
 
-    TENSORSTORE_CHECK_OK_AND_ASSIGN(auto base_zarr_dtype,
-                                        ChooseBaseDType(test_source.dtype()));
+
     std::vector<std::int64_t> new_image_shape(num_dims,1);
     std::vector<std::int64_t> chunk_shape(num_dims,1);
     new_image_shape[y_dim] = _full_image_height;
     new_image_shape[x_dim] = _full_image_width;
-    chunk_shape[y_dim] = _chunk_size;
-    chunk_shape[x_dim] = _chunk_size;
-    TENSORSTORE_CHECK_OK_AND_ASSIGN(auto dest, tensorstore::Open({{"driver", "zarr"},
-                                {"kvstore", {{"driver", "file"},
-                                            {"path", output_file}}
-                                },
-                                {"context", {
-                                {"cache_pool", {{"total_bytes_limit", 1000000000}}},
-                                {"data_copy_concurrency", {{"limit", 8}}},
-                                {"file_io_concurrency", {{"limit", 8}}},
-                                }},
-                                {"metadata", {
-                                            {"zarr_format", 2},
-                                            {"shape", new_image_shape},
-                                            {"chunks", chunk_shape},
-                                            {"dtype", base_zarr_dtype.encoded_dtype},
-                                            },
-                                }},
+    chunk_shape[y_dim] = _chunk_size_y;
+    chunk_shape[x_dim] = _chunk_size_x;
+    TENSORSTORE_CHECK_OK_AND_ASSIGN(auto test_source, tensorstore::Open(
+                    GetOmeTiffSpecToRead( _input_dir + "/" + _image_vec[0].file_name),
+                    tensorstore::OpenMode::open,
+                    tensorstore::ReadWriteMode::read).result());
+
+    TENSORSTORE_CHECK_OK_AND_ASSIGN(auto base_zarr_dtype,
+                                        ChooseBaseDType(test_source.dtype()));
+    tensorstore::Spec output_spec{};
+  
+    if (v == VisType::TS_Zarr | v == VisType::Viv){
+      output_spec = GetZarrSpecToWrite(output_file + "/" + scale_key, new_image_shape, chunk_shape, base_zarr_dtype.encoded_dtype);
+    } else if (v == VisType::TS_PCN){
+      output_spec = GetPCNSpecToWrite(output_file, scale_key, new_image_shape, chunk_shape, test_source.dtype().name(), true);
+    }
+
+    TENSORSTORE_CHECK_OK_AND_ASSIGN(auto dest, tensorstore::Open(
+                                output_spec,
                                 tensorstore::OpenMode::create |
                                 tensorstore::OpenMode::delete_existing,
                                 tensorstore::ReadWriteMode::write).result());
-
-    auto t1 = std::chrono::high_resolution_clock::now();
+    
     for(const auto& i: _image_vec){
         
+        th_pool.push_task([&dest, i, x_dim, y_dim, this, &pending_writes, v](){
 
-        th_pool.push_task([&dest, i, x_dim, y_dim, this, &pending_writes](){
-
-        TENSORSTORE_CHECK_OK_AND_ASSIGN(auto source, tensorstore::Open({{"driver", "ometiff"},
-                                    {"kvstore", {{"driver", "tiled_tiff"},
-                                                {"path", this->_input_dir + "/" + i.file_name}}
-                                    }},
+        TENSORSTORE_CHECK_OK_AND_ASSIGN(auto source, tensorstore::Open(
+                                    GetOmeTiffSpecToRead(this->_input_dir + "/" + i.file_name),
                                     tensorstore::OpenMode::open,
                                     tensorstore::ReadWriteMode::read).result());
         
@@ -182,26 +172,24 @@ void OmeTiffCollToZarr::Assemble(const std::string& output_file, VisType v, BS::
                 tensorstore::Dims(4).ClosedInterval(0, image_width-1) ,
                 array).value();
 
-        pending_writes.emplace_back(tensorstore::Write(array, dest |
-              tensorstore::Dims(y_dim).ClosedInterval(i.y_grid*this->_chunk_size,i.y_grid*this->_chunk_size+image_height-1) |
-              tensorstore::Dims(x_dim).ClosedInterval(i.x_grid*this->_chunk_size,i.x_grid*this->_chunk_size+image_width-1)));
+        tensorstore::IndexTransform<> transform = tensorstore::IdentityTransform(dest.domain());
+        if(v == VisType::TS_PCN){
+          transform = (std::move(transform) | tensorstore::Dims(2, 3).IndexSlice({0,0})).value();
 
-        //return result;  
+        } 
+        transform = (std::move(transform) | tensorstore::Dims(y_dim).ClosedInterval(i._y_grid*this->_chunk_size_y,i._y_grid*this->_chunk_size_y+image_height-1) 
+                                            | tensorstore::Dims(x_dim).ClosedInterval(i._x_grid*this->_chunk_size_x,i._x_grid*this->_chunk_size_x+image_width-1)).value(); 
+        pending_writes.emplace_back(tensorstore::Write(array, dest | transform));
 
         });
     }
-    auto t2 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> et1 = t2-t1;
-    std::cout << "time for submitting the requests "<< et1.count() << std::endl;
+
     th_pool.wait_for_tasks();
-    auto t3 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> et2 = t3-t1;
-    std::cout << "finished all reads  "<< et2.count() << std::endl;
+
     size_t total_writes = pending_writes.size(); 
 
-    std::cout << "total writes " << total_writes << std::endl;
-    size_t count = 0;
-    //while( count < total_writes){
+    size_t count = 0, num_pass = 10;
+    while( num_pass > 0){
       for (auto it = pending_writes.begin(); it != pending_writes.end();) {
         if (it->commit_future.ready()) {
           if (!GetStatus(it->commit_future).ok()) {
@@ -213,30 +201,22 @@ void OmeTiffCollToZarr::Assemble(const std::string& output_file, VisType v, BS::
         } else {
           ++it;
         }
-
-
       }
-        std::cout << "Count is " << count << std::endl;
-        std::cout << "Pending writes " << pending_writes.size() << std::endl;
+      --num_pass;
+    }
 
-    auto t4 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> et3 = t4-t1;
-    std::cout << "one pass done on write requests  "<< et3.count() << std::endl;
-
-    //sleep(10);
+    std::cout << "remaining stuff "<< pending_writes.size() << std::endl; 
+    // force the rest of it to finish
     for (auto& front : pending_writes) {
       if (!GetStatus(front.commit_future).ok()) {
         write_failed_count++;
-        std::cout << GetStatus(front.commit_future) << std::endl;
       }
     }
-    auto t5 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> et4 = t5-t1;
-    std::cout << "done with all  "<< et3.count() << std::endl;
-    std::cout << "failed writes " << write_failed_count << std::endl;
-    //sleep(10);
-    //}
   }
+
+  auto t2 = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> et1 = t2-t1;
+  std::cout << "time for assembly: "<< et1.count() << std::endl;
 
 
 }

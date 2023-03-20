@@ -7,7 +7,7 @@
 #include "ome_tiff_to_zarr_converter.h"
 #include "zarr_pyramid_assembler.h"
 #include "zarr_base_to_pyr_gen.h"
-#include "utils.h"
+#include "utilities.h"
 #include "BS_thread_pool.hpp"
 
 class OmeTifftoZarrPyramid{
