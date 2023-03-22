@@ -37,9 +37,56 @@ void ZarrBaseToPyramidGen::CreatePyramidImages(VisType v, BS::thread_pool& th_po
 {
 
     int resolution = 1; // this gets doubled in each level up
+    tensorstore::Spec input_spec{};
+    if (v == VisType::TS_Zarr | v == VisType::Viv){
+      input_spec = GetZarrSpecToRead(_input_zarr_dir, std::to_string(_max_level));
+    } else if (v == VisType::TS_NPC){
+      input_spec = GetNPCSpecToRead(_input_zarr_dir, std::to_string(_max_level));
+    }
+
+    TENSORSTORE_CHECK_OK_AND_ASSIGN(auto test_store, tensorstore::Open(
+                            input_spec,
+                            tensorstore::OpenMode::open,
+                            tensorstore::ReadWriteMode::read).result());
+    auto data_type = GetDataTypeCode(test_store.dtype().name());
+    
     for (int i=_max_level; i>_min_level; --i){
         resolution *= 2;
-        WriteDownsampledImage<uint16_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+
+        switch(data_type){
+          case 1:
+            WriteDownsampledImage<uint8_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            break;
+          case 2:
+            WriteDownsampledImage<uint16_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            break;
+          case 4:
+            WriteDownsampledImage<uint32_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            break;
+          case 8:
+            WriteDownsampledImage<uint64_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            break;
+          case 16:
+            WriteDownsampledImage<int8_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            break;
+          case 32:
+            WriteDownsampledImage<int16_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            break;
+          case 64:
+            WriteDownsampledImage<int32_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            break;
+          case 128:
+            WriteDownsampledImage<int64_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            break;
+          case 256:
+            WriteDownsampledImage<float>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            break;
+          case 512:
+            WriteDownsampledImage<double>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            break;
+          default:
+            break;
+          }
     } 
 }
 
@@ -124,19 +171,6 @@ void ZarrBaseToPyramidGen::WriteDownsampledImage(   const std::string& input_fil
             auto x_end = std::min({(j+1)*_chunk_size, cur_x_max});
             auto prev_x_start = 2*x_start;
             auto prev_x_end = std::min({2*x_end, prev_x_max});
-            
-            /*
-                br -> Bottom Right
-                tl -< Top Left
-
-                these two points bounds a rectengular chunk
-            */
-
-            Point prev_tl(prev_x_start, prev_y_start);
-            Point prev_br(prev_x_end, prev_y_end);
-
-            Point cur_tl(x_start, y_start);
-            Point cur_br(x_end, y_end);
             
             th_pool.push_task([ &store1, &store2, 
                                 prev_x_start, prev_x_end, prev_y_start, prev_y_end, 

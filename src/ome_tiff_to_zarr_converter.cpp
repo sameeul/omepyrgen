@@ -90,11 +90,7 @@ void OmeTiffToZarrConverter::Convert( const std::string& input_file, const std::
                             tensorstore::ReadWriteMode::read).result());
 
   auto shape = store1.domain().shape();
-  
-  uint16_t data_type = GetDataTypeCode(store1.dtype().name()); 
-  
-
-  std::cout << "Data Type Code " << data_type << std::endl;
+  auto data_type = GetDataTypeCode(store1.dtype().name()); 
   TENSORSTORE_CHECK_OK_AND_ASSIGN(auto base_zarr_dtype,
                                      ChooseBaseDType(store1.dtype()));
   _image_length = shape[3]; // as per tiled_tiff spec

@@ -111,7 +111,7 @@ void OmeTiffCollToZarr::Assemble(const std::string& output_file, const std::stri
     y_dim = 1;
     num_dims = 3;
   
-  } else if (v == VisType::TS_PCN ){ // 3D file
+  } else if (v == VisType::TS_NPC ){ // 3D file
     x_dim = 1;
     y_dim = 0;
     num_dims = 3;
@@ -140,8 +140,8 @@ void OmeTiffCollToZarr::Assemble(const std::string& output_file, const std::stri
   
     if (v == VisType::TS_Zarr | v == VisType::Viv){
       output_spec = GetZarrSpecToWrite(output_file + "/" + scale_key, new_image_shape, chunk_shape, base_zarr_dtype.encoded_dtype);
-    } else if (v == VisType::TS_PCN){
-      output_spec = GetPCNSpecToWrite(output_file, scale_key, new_image_shape, chunk_shape, test_source.dtype().name(), true);
+    } else if (v == VisType::TS_NPC){
+      output_spec = GetNPCSpecToWrite(output_file, scale_key, new_image_shape, chunk_shape, 1, test_source.dtype().name(), true);
     }
 
     TENSORSTORE_CHECK_OK_AND_ASSIGN(auto dest, tensorstore::Open(
@@ -173,7 +173,7 @@ void OmeTiffCollToZarr::Assemble(const std::string& output_file, const std::stri
                 array).value();
 
         tensorstore::IndexTransform<> transform = tensorstore::IdentityTransform(dest.domain());
-        if(v == VisType::TS_PCN){
+        if(v == VisType::TS_NPC){
           transform = (std::move(transform) | tensorstore::Dims(2, 3).IndexSlice({0,0})).value();
 
         } 
