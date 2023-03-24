@@ -184,9 +184,8 @@ void OmeTifftoZarrPyramid::GenerateFromCollection(
     std::cout << "Writing base zarr image..."<<std::endl;
     _tiff_coll_to_zarr_ptr->Assemble(zarr_file_dir, std::to_string(_max_level), v, _th_pool);
     std::cout << "Generating image pyramids..."<<std::endl;
-    _zpg_ptr = std::make_unique<ZarrBaseToPyramidGen>(base_zarr_file, zarr_file_dir,  
+    _zpg_ptr = std::make_unique<ZarrBaseToPyramidGen>(zarr_file_dir, zarr_file_dir,  
                                 _max_level, _min_level);
     _zpg_ptr->CreatePyramidImages(v, _th_pool);
     WriteMultiscaleMetadataForImageCollection(image_name, output_dir, v);
-
 }

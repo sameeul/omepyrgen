@@ -4,11 +4,9 @@
 #include <string>
 #include <unistd.h>
 #include <stdint.h>
-#include<typeinfo>
-#include <fstream>
 #include <iostream>
 #include <string>
-#include <type_traits>
+#include <string_view>
 #include <vector>
 #include <chrono>
 #include <future>
@@ -18,18 +16,12 @@
 #include "tensorstore/context.h"
 #include "tensorstore/array.h"
 #include "tensorstore/driver/zarr/dtype.h"
-//#include "python/tensorstore/index_space.h"
 #include "tensorstore/index_space/dim_expression.h"
 #include "tensorstore/kvstore/kvstore.h"
 #include "tensorstore/open.h"
 
-
-#include <filesystem>
-namespace fs = std::filesystem;
-
 using ::tensorstore::Context;
 using ::tensorstore::internal_zarr::ChooseBaseDType;
-using namespace std::chrono_literals;
 
 void OmeTiffToZarrConverter::Convert( const std::string& input_file, const std::string& output_file, 
                                       const std::string& scale_key, const VisType v, BS::thread_pool& th_pool){
@@ -44,9 +36,9 @@ void OmeTiffToZarrConverter::Convert( const std::string& input_file, const std::
     x_dim = 2;
     y_dim = 1;
     num_dims = 3;
-  } else if (v == VisType::TS_PCN ){ // 3D file
-    x_dim = 1;
-    y_dim = 0;
+  } else if (v == VisType::TS_NPC ){ // 3D file
+    x_dim = 0;
+    y_dim = 1;
     num_dims = 3;
   }
 
@@ -55,6 +47,7 @@ void OmeTiffToZarrConverter::Convert( const std::string& input_file, const std::
                             tensorstore::ReadWriteMode::read).result());
 
   auto shape = store1.domain().shape();
+  auto data_type = GetDataTypeCode(store1.dtype().name()); 
   TENSORSTORE_CHECK_OK_AND_ASSIGN(auto base_zarr_dtype,
                                      ChooseBaseDType(store1.dtype()));
   _image_length = shape[3]; // as per tiled_tiff spec
@@ -73,8 +66,8 @@ void OmeTiffToZarrConverter::Convert( const std::string& input_file, const std::
   
   if (v == VisType::TS_Zarr | v == VisType::Viv){
     output_spec = GetZarrSpecToWrite(output_file + "/" + scale_key, new_image_shape, chunk_shape, base_zarr_dtype.encoded_dtype);
-  } else if (v == VisType::TS_PCN){
-    output_spec = GetPCNSpecToWrite(output_file, scale_key, new_image_shape, chunk_shape, store1.dtype().name(), true);
+  } else if (v == VisType::TS_NPC){
+    output_spec = GetNPCSpecToWrite(output_file, scale_key, new_image_shape, chunk_shape, 1, store1.dtype().name(), true);
   }
 
   TENSORSTORE_CHECK_OK_AND_ASSIGN(auto store2, tensorstore::Open(
@@ -90,26 +83,26 @@ void OmeTiffToZarrConverter::Convert( const std::string& input_file, const std::
       std::int64_t x_start = j*_chunk_size;
       std::int64_t x_end = std::min({(j+1)*_chunk_size, _image_width});
       th_pool.push_task([&store1, &store2, x_start, x_end, y_start, y_end, x_dim, y_dim, v](){  
+
         auto array = tensorstore::AllocateArray({y_end-y_start, x_end-x_start},tensorstore::c_order,
-                                      tensorstore::value_init, store1.dtype());
+                                tensorstore::value_init, store1.dtype());
         // initiate a read
         tensorstore::Read(store1 | 
-                  tensorstore::Dims(3).ClosedInterval(y_start,y_end-1) |
-                  tensorstore::Dims(4).ClosedInterval(x_start,x_end-1) ,
-                  array).value();
-                          
-        //initiate write
+                          tensorstore::Dims(3).ClosedInterval(y_start,y_end-1) |
+                          tensorstore::Dims(4).ClosedInterval(x_start,x_end-1) ,
+                          array).value();
+        
         tensorstore::IndexTransform<> transform = tensorstore::IdentityTransform(store2.domain());
-        if(v == VisType::TS_PCN){
-          transform = (std::move(transform) | tensorstore::Dims(2, 3).IndexSlice({0,0})
+        if(v == VisType::TS_NPC){
+          transform = (std::move(transform) | tensorstore::Dims(2, 3).IndexSlice({0,0}) 
                                             | tensorstore::Dims(y_dim).ClosedInterval(y_start,y_end-1) 
-                                            | tensorstore::Dims(x_dim).ClosedInterval(x_start,x_end-1)).value();
-
-        } else if (v == VisType::TS_Zarr || v == VisType::Viv) {
+                                            | tensorstore::Dims(x_dim).ClosedInterval(x_start,x_end-1)
+                                            | tensorstore::Dims(x_dim, y_dim).Transpose({y_dim, x_dim})).value();
+        }else if (v == VisType::TS_Zarr || v == VisType::Viv){
           transform = (std::move(transform) | tensorstore::Dims(y_dim).ClosedInterval(y_start,y_end-1) 
                                             | tensorstore::Dims(x_dim).ClosedInterval(x_start,x_end-1)).value();
-        } 
-        tensorstore::Write(array, store2 | transform).value();  
+        }
+        tensorstore::Write(array, store2 | transform).value();
       });       
 
     }

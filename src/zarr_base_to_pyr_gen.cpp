@@ -36,16 +36,64 @@ using namespace std::chrono_literals;
 void ZarrBaseToPyramidGen::CreatePyramidImages(VisType v, BS::thread_pool& th_pool)
 {
 
+    int resolution = 1; // this gets doubled in each level up
+    tensorstore::Spec input_spec{};
+    if (v == VisType::TS_Zarr | v == VisType::Viv){
+      input_spec = GetZarrSpecToRead(_input_zarr_dir, std::to_string(_max_level));
+    } else if (v == VisType::TS_NPC){
+      input_spec = GetNPCSpecToRead(_input_zarr_dir, std::to_string(_max_level));
+    }
 
+    TENSORSTORE_CHECK_OK_AND_ASSIGN(auto test_store, tensorstore::Open(
+                            input_spec,
+                            tensorstore::OpenMode::open,
+                            tensorstore::ReadWriteMode::read).result());
+    auto data_type = GetDataTypeCode(test_store.dtype().name());
+    
     for (int i=_max_level; i>_min_level; --i){
-        WriteDownsampledImage<uint16_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1),  v, th_pool);
+        resolution *= 2;
+
+        switch(data_type){
+          case 1:
+            WriteDownsampledImage<uint8_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            break;
+          case 2:
+            WriteDownsampledImage<uint16_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            break;
+          case 4:
+            WriteDownsampledImage<uint32_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            break;
+          case 8:
+            WriteDownsampledImage<uint64_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            break;
+          case 16:
+            WriteDownsampledImage<int8_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            break;
+          case 32:
+            WriteDownsampledImage<int16_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            break;
+          case 64:
+            WriteDownsampledImage<int32_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            break;
+          case 128:
+            WriteDownsampledImage<int64_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            break;
+          case 256:
+            WriteDownsampledImage<float>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            break;
+          case 512:
+            WriteDownsampledImage<double>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            break;
+          default:
+            break;
+          }
     } 
 }
 
 template <typename T>
 void ZarrBaseToPyramidGen::WriteDownsampledImage(   const std::string& input_file, const std::string& input_scale_key, 
                                                     const std::string& output_file, const std::string& output_scale_key,
-                                                    VisType v, BS::thread_pool& th_pool)
+                                                    int resolution, VisType v, BS::thread_pool& th_pool)
 {
     int num_dims, x_dim, y_dim;
 
@@ -59,7 +107,7 @@ void ZarrBaseToPyramidGen::WriteDownsampledImage(   const std::string& input_fil
         y_dim = 1;
         num_dims = 3;
     
-    } else if (v == VisType::TS_PCN ){ // 3D file
+    } else if (v == VisType::TS_NPC ){ // 3D file
         x_dim = 1;
         y_dim = 0;
         num_dims = 3;
@@ -67,8 +115,8 @@ void ZarrBaseToPyramidGen::WriteDownsampledImage(   const std::string& input_fil
     tensorstore::Spec input_spec{};
     if (v == VisType::TS_Zarr | v == VisType::Viv){
       input_spec = GetZarrSpecToRead(input_file, input_scale_key);
-    } else if (v == VisType::TS_PCN){
-      input_spec = GetPCNSpecToRead(input_file, input_scale_key);
+    } else if (v == VisType::TS_NPC){
+      input_spec = GetNPCSpecToRead(input_file, input_scale_key);
     }
     //tensorstore::Context context = Context::Default();
     TENSORSTORE_CHECK_OK_AND_ASSIGN(auto store1, tensorstore::Open(
@@ -104,8 +152,8 @@ void ZarrBaseToPyramidGen::WriteDownsampledImage(   const std::string& input_fil
     if (v == VisType::TS_Zarr | v == VisType::Viv){
       output_spec = GetZarrSpecToWrite(output_file + "/" + output_scale_key, new_image_shape, chunk_shape, base_zarr_dtype.encoded_dtype);
       open_mode = open_mode | tensorstore::OpenMode::delete_existing;
-    } else if (v == VisType::TS_PCN){
-      output_spec = GetPCNSpecToWrite(output_file, output_scale_key, new_image_shape, chunk_shape, store1.dtype().name(), false);
+    } else if (v == VisType::TS_NPC){
+      output_spec = GetNPCSpecToWrite(output_file, output_scale_key, new_image_shape, chunk_shape, resolution, store1.dtype().name(), false);
     }
     
     TENSORSTORE_CHECK_OK_AND_ASSIGN(auto store2, tensorstore::Open(
@@ -124,19 +172,6 @@ void ZarrBaseToPyramidGen::WriteDownsampledImage(   const std::string& input_fil
             auto prev_x_start = 2*x_start;
             auto prev_x_end = std::min({2*x_end, prev_x_max});
             
-            /*
-                br -> Bottom Right
-                tl -< Top Left
-
-                these two points bounds a rectengular chunk
-            */
-
-            Point prev_tl(prev_x_start, prev_y_start);
-            Point prev_br(prev_x_end, prev_y_end);
-
-            Point cur_tl(x_start, y_start);
-            Point cur_br(x_end, y_end);
-            
             th_pool.push_task([ &store1, &store2, 
                                 prev_x_start, prev_x_end, prev_y_start, prev_y_end, 
                                 x_start, x_end, y_start, y_end, 
@@ -145,7 +180,7 @@ void ZarrBaseToPyramidGen::WriteDownsampledImage(   const std::string& input_fil
                 auto array = tensorstore::Array(read_buffer.data(), {prev_y_end-prev_y_start, prev_x_end-prev_x_start}, tensorstore::c_order);
 
                 tensorstore::IndexTransform<> input_transform = tensorstore::IdentityTransform(store1.domain());
-                if(v == VisType::TS_PCN){
+                if(v == VisType::TS_NPC){
                 input_transform = (std::move(input_transform) | tensorstore::Dims(2, 3).IndexSlice({0,0})).value();
 
                 } 
@@ -158,7 +193,7 @@ void ZarrBaseToPyramidGen::WriteDownsampledImage(   const std::string& input_fil
                 auto result_array = tensorstore::Array(result->data(), {y_end-y_start, x_end-x_start}, tensorstore::c_order);
 
                 tensorstore::IndexTransform<> output_transform = tensorstore::IdentityTransform(store2.domain());
-                if(v == VisType::TS_PCN){
+                if(v == VisType::TS_NPC){
                 output_transform = (std::move(output_transform) | tensorstore::Dims(2, 3).IndexSlice({0,0})).value();
 
                 } 

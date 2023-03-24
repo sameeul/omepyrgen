@@ -45,7 +45,7 @@ tensorstore::Spec GetZarrSpecToRead(const std::string& filename, const std::stri
 }
 
 
-tensorstore::Spec GetPCNSpecToRead(const std::string& filename, const std::string& scale_key){
+tensorstore::Spec GetNPCSpecToRead(const std::string& filename, const std::string& scale_key){
     return tensorstore::Spec::FromJson({{"driver", "neuroglancer_precomputed"},
                             {"kvstore", {{"driver", "file"},
                                          {"path", filename}}
@@ -57,12 +57,12 @@ tensorstore::Spec GetPCNSpecToRead(const std::string& filename, const std::strin
 
 }
 
-tensorstore::Spec GetPCNSpecToWrite(const std::string& filename, 
+tensorstore::Spec GetNPCSpecToWrite(const std::string& filename, 
                                     const std::string& scale_key,
                                     const std::vector<std::int64_t>& image_shape, 
                                     const std::vector<std::int64_t>& chunk_shape,
+                                    int resolution,
                                     std::string_view dtype, bool base_level){
-
     if (base_level){
       return tensorstore::Spec::FromJson({{"driver", "neuroglancer_precomputed"},
                               {"kvstore", {{"driver", "file"},
@@ -83,6 +83,7 @@ tensorstore::Spec GetPCNSpecToWrite(const std::string& filename,
                                             {"key", scale_key},
                                             {"size", image_shape},
                                             {"chunk_size", chunk_shape},
+                                            {"resolution", {resolution, resolution, 1}}
                                             },
                               }}).value();
     } else {
@@ -100,8 +101,24 @@ tensorstore::Spec GetPCNSpecToWrite(const std::string& filename,
                                       {"key", scale_key},
                                       {"size", image_shape},
                                       {"chunk_size", chunk_shape},
+                                      {"resolution", {resolution, resolution, 1}}
                                       },
                         }}).value();
     }
 
+}
+
+uint16_t GetDataTypeCode (std::string_view type_name){
+
+  if (type_name == std::string_view{"uint8"}) {return 1;}
+  else if (type_name == std::string_view{"uint16"}) {return 2;}
+  else if (type_name == std::string_view{"uint32"}) {return 4;}
+  else if (type_name == std::string_view{"uint64"}) {return 8;}
+  else if (type_name == std::string_view{"int8"}) {return 16;}
+  else if (type_name == std::string_view{"int16"}) {return 32;}
+  else if (type_name == std::string_view{"int32"}) {return 64;}
+  else if (type_name == std::string_view{"int64"}) {return 128;}
+  else if (type_name == std::string_view{"float32"}) {return 256;}
+  else if (type_name == std::string_view{"float64"}) {return 512;}
+  else {return 2;}
 }

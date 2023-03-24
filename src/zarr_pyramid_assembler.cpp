@@ -36,7 +36,6 @@ namespace fs = std::filesystem;
 using ::tensorstore::Context;
 using ::tensorstore::internal_zarr::ChooseBaseDType;
 
-
 OmeTiffCollToZarr::OmeTiffCollToZarr(const std::string& input_dir,
                       const std::string& stitching_file):
         _input_dir(input_dir),
@@ -111,9 +110,9 @@ void OmeTiffCollToZarr::Assemble(const std::string& output_file, const std::stri
     y_dim = 1;
     num_dims = 3;
   
-  } else if (v == VisType::TS_PCN ){ // 3D file
-    x_dim = 1;
-    y_dim = 0;
+  } else if (v == VisType::TS_NPC ){ // 3D file
+    x_dim = 0;
+    y_dim = 1;
     num_dims = 3;
   }
 
@@ -140,8 +139,8 @@ void OmeTiffCollToZarr::Assemble(const std::string& output_file, const std::stri
   
     if (v == VisType::TS_Zarr | v == VisType::Viv){
       output_spec = GetZarrSpecToWrite(output_file + "/" + scale_key, new_image_shape, chunk_shape, base_zarr_dtype.encoded_dtype);
-    } else if (v == VisType::TS_PCN){
-      output_spec = GetPCNSpecToWrite(output_file, scale_key, new_image_shape, chunk_shape, test_source.dtype().name(), true);
+    } else if (v == VisType::TS_NPC){
+      output_spec = GetNPCSpecToWrite(output_file, scale_key, new_image_shape, chunk_shape, 1, test_source.dtype().name(), true);
     }
 
     TENSORSTORE_CHECK_OK_AND_ASSIGN(auto dest, tensorstore::Open(
@@ -150,21 +149,19 @@ void OmeTiffCollToZarr::Assemble(const std::string& output_file, const std::stri
                                 tensorstore::OpenMode::delete_existing,
                                 tensorstore::ReadWriteMode::write).result());
     
-    for(const auto& i: _image_vec){
-        
-        th_pool.push_task([&dest, i, x_dim, y_dim, this, &pending_writes, v](){
+    for(const auto& i: _image_vec){        
+      th_pool.push_task([&dest, i, x_dim, y_dim, this, &pending_writes, v](){
 
         TENSORSTORE_CHECK_OK_AND_ASSIGN(auto source, tensorstore::Open(
                                     GetOmeTiffSpecToRead(this->_input_dir + "/" + i.file_name),
                                     tensorstore::OpenMode::open,
                                     tensorstore::ReadWriteMode::read).result());
-        
+
         auto image_shape = source.domain().shape();
         auto image_width = image_shape[4];
         auto image_height = image_shape[3];
-
         auto array = tensorstore::AllocateArray({image_height, image_width},tensorstore::c_order,
-                                                            tensorstore::value_init, source.dtype());
+                                                          tensorstore::value_init, source.dtype());
 
         // initiate a read
         tensorstore::Read(source | 
@@ -173,15 +170,19 @@ void OmeTiffCollToZarr::Assemble(const std::string& output_file, const std::stri
                 array).value();
 
         tensorstore::IndexTransform<> transform = tensorstore::IdentityTransform(dest.domain());
-        if(v == VisType::TS_PCN){
-          transform = (std::move(transform) | tensorstore::Dims(2, 3).IndexSlice({0,0})).value();
+        if(v == VisType::TS_NPC){
+          transform = (std::move(transform) | tensorstore::Dims(2, 3).IndexSlice({0,0}) 
+                                            | tensorstore::Dims(y_dim).SizedInterval(i._y_grid*this->_chunk_size_y, image_height) 
+                                            | tensorstore::Dims(x_dim).SizedInterval(i._x_grid*this->_chunk_size_x, image_width)
+                                            | tensorstore::Dims(x_dim, y_dim).Transpose({y_dim, x_dim})).value();
 
-        } 
-        transform = (std::move(transform) | tensorstore::Dims(y_dim).ClosedInterval(i._y_grid*this->_chunk_size_y,i._y_grid*this->_chunk_size_y+image_height-1) 
-                                            | tensorstore::Dims(x_dim).ClosedInterval(i._x_grid*this->_chunk_size_x,i._x_grid*this->_chunk_size_x+image_width-1)).value(); 
-        pending_writes.emplace_back(tensorstore::Write(array, dest | transform));
+        } else if (v == VisType::TS_Zarr | v == VisType::Viv){
+          transform = (std::move(transform) | tensorstore::Dims(y_dim).SizedInterval(i._y_grid*this->_chunk_size_y, image_height) 
+                                            | tensorstore::Dims(x_dim).SizedInterval(i._x_grid*this->_chunk_size_x, image_width)).value();
+        }
+      pending_writes.emplace_back(tensorstore::Write(array, dest | transform));
 
-        });
+      });
     }
 
     th_pool.wait_for_tasks();

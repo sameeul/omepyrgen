@@ -20,10 +20,10 @@ public:
 private:
     std::string _input_zarr_dir, _output_root_dir;
     int _max_level, _min_level;
-    std::int64_t _chunk_size = 1080;
+    std::int64_t _chunk_size = 1080; // need to retrive this dynamically !
 
     template<typename T>
     void WriteDownsampledImage(const std::string& input_file, const std::string& input_scale_key, const std::string& output_file, const std::string& output_scale_key,
-                                                VisType v, BS::thread_pool& th_pool);
+                                                int resolution, VisType v, BS::thread_pool& th_pool);
 };
 

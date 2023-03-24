@@ -7,7 +7,7 @@
 #include "tensorstore/tensorstore.h"
 #include "tensorstore/spec.h"
 
-enum VisType {Viv, TS_Zarr, TS_PCN};
+enum VisType {Viv, TS_Zarr, TS_NPC};
 
 struct Point {
     std::int64_t x, y;
@@ -21,10 +21,14 @@ tensorstore::Spec GetZarrSpecToWrite(   const std::string& filename,
                                         std::vector<std::int64_t>& image_shape, 
                                         std::vector<std::int64_t>& chunk_shape,
                                         std::string& dtype);
-tensorstore::Spec GetPCNSpecToRead(const std::string& filename, const std::string& scale_key);
-tensorstore::Spec GetPCNSpecToWrite(const std::string& filename, 
+tensorstore::Spec GetNPCSpecToRead(const std::string& filename, const std::string& scale_key);
+tensorstore::Spec GetNPCSpecToWrite(const std::string& filename, 
                                     const std::string& scale_key,
                                     const std::vector<std::int64_t>& image_shape, 
                                     const std::vector<std::int64_t>& chunk_shape,
+                                    int resolution,
                                     std::string_view dtype,
                                     bool base_level);
+
+
+uint16_t GetDataTypeCode (std::string_view type_name);
