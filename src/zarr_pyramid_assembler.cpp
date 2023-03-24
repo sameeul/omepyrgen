@@ -36,18 +36,22 @@ namespace fs = std::filesystem;
 using ::tensorstore::Context;
 using ::tensorstore::internal_zarr::ChooseBaseDType;
 
-OmeTiffCollToZarr::OmeTiffCollToZarr(const std::string& input_dir,
-                      const std::string& stitching_file):
-        _input_dir(input_dir),
-        _stitching_file(stitching_file){
+
+
+void OmeTiffCollToZarr::Assemble(const std::string& output_file, const std::string& scale_key, VisType v, BS::thread_pool& th_pool)
+{
   std::regex match_str(
       "file:\\s(\\S+);[\\s|\\S]+position:\\s\\((\\d+),\\s(\\d+)\\);[\\s|\\S]+grid:\\s\\((\\d+),\\s(\\d+)\\);");
   
 
   std::string line;
   std::smatch pieces_match;
-
-  // find final image size 
+  int grid_x_max = 0, grid_y_max = 0;
+  _image_vec.clear();
+  _chunk_size_x = 0;
+  _chunk_size_y = 0;
+  _full_image_width = 0;
+  _full_image_height = 0;
 
   std::fstream stitch_vec;
   stitch_vec.open(_stitching_file, std::ios::in);
@@ -62,41 +66,13 @@ OmeTiffCollToZarr::OmeTiffCollToZarr(const std::string& input_dir,
           auto fname = pieces_match[1].str();
           auto gx = std::stoi(pieces_match[4].str());
           auto gy = std::stoi(pieces_match[5].str());
+          gx > grid_x_max ? grid_x_max = gx : grid_x_max = grid_x_max;
+          gy > grid_y_max ? grid_y_max = gy : grid_y_max = grid_y_max;
           _image_vec.emplace_back(fname, gx, gy);   
         }
       }
     }
-
-    if (_image_vec.size() != 0){
-      TENSORSTORE_CHECK_OK_AND_ASSIGN(auto test_source, tensorstore::Open(
-                          GetOmeTiffSpecToRead( _input_dir + "/" + _image_vec[0].file_name),
-                          tensorstore::OpenMode::open,
-                          tensorstore::ReadWriteMode::read).result());
-
-      TENSORSTORE_CHECK_OK_AND_ASSIGN(auto base_zarr_dtype,
-                                          ChooseBaseDType(test_source.dtype()));
-      auto test_image_shape = test_source.domain().shape();
-      _chunk_size_x = test_image_shape[4];
-      _chunk_size_y = test_image_shape[3];
-
-
-      int grid_x_max = 0, grid_y_max = 0;
-
-      for(auto &i: _image_vec){
-        i._x_grid > grid_x_max ? grid_x_max = i._x_grid : grid_x_max = grid_x_max;
-        i._y_grid > grid_y_max ? grid_y_max = i._x_grid : grid_y_max = grid_y_max;
-      }
-
-      _full_image_width = (grid_x_max+1)*_chunk_size_x;
-      _full_image_height = (grid_y_max+1)*_chunk_size_y;
-    }
-
   }
-}
-
-void OmeTiffCollToZarr::Assemble(const std::string& output_file, const std::string& scale_key, VisType v, BS::thread_pool& th_pool)
-{
-
   auto t1 = std::chrono::high_resolution_clock::now();
   int num_dims, x_dim, y_dim;
 
@@ -119,24 +95,28 @@ void OmeTiffCollToZarr::Assemble(const std::string& output_file, const std::stri
   if (_image_vec.size() != 0){
     std::list<tensorstore::WriteFutures> pending_writes;
     size_t write_failed_count = 0;
-
-
-
+    TENSORSTORE_CHECK_OK_AND_ASSIGN(auto test_source, tensorstore::Open(
+                    GetOmeTiffSpecToRead( _input_dir + "/" + _image_vec[0].file_name),
+                    tensorstore::OpenMode::open,
+                    tensorstore::ReadWriteMode::read).result());
+    auto test_image_shape = test_source.domain().shape();
+    _chunk_size_x = test_image_shape[4];
+    _chunk_size_y = test_image_shape[3];
+    _full_image_width = (grid_x_max+1)*_chunk_size_x;
+    _full_image_height = (grid_y_max+1)*_chunk_size_y;
+    
+    TENSORSTORE_CHECK_OK_AND_ASSIGN(auto base_zarr_dtype,
+                                        ChooseBaseDType(test_source.dtype()));
+    
+    tensorstore::Spec output_spec{};
+    
     std::vector<std::int64_t> new_image_shape(num_dims,1);
     std::vector<std::int64_t> chunk_shape(num_dims,1);
     new_image_shape[y_dim] = _full_image_height;
     new_image_shape[x_dim] = _full_image_width;
     chunk_shape[y_dim] = _chunk_size_y;
     chunk_shape[x_dim] = _chunk_size_x;
-    TENSORSTORE_CHECK_OK_AND_ASSIGN(auto test_source, tensorstore::Open(
-                    GetOmeTiffSpecToRead( _input_dir + "/" + _image_vec[0].file_name),
-                    tensorstore::OpenMode::open,
-                    tensorstore::ReadWriteMode::read).result());
-
-    TENSORSTORE_CHECK_OK_AND_ASSIGN(auto base_zarr_dtype,
-                                        ChooseBaseDType(test_source.dtype()));
-    tensorstore::Spec output_spec{};
-  
+    
     if (v == VisType::TS_Zarr | v == VisType::Viv){
       output_spec = GetZarrSpecToWrite(output_file + "/" + scale_key, new_image_shape, chunk_shape, base_zarr_dtype.encoded_dtype);
     } else if (v == VisType::TS_NPC){
@@ -233,7 +213,6 @@ void OmeTiffCollToZarr::GenerateOmeXML(const std::string& image_name, const std:
             pugi::xml_parse_result result = doc.load_string(infobuf);
             TIFFClose(tiff_);
             if (result){
-
                 doc.child("OME").child("Image").attribute("ID").set_value(image_name.c_str());
                 doc.child("OME").child("Image").attribute("Name").set_value(image_name.c_str());
                 doc.child("OME").child("Image").child("Pixels").attribute("SizeX").set_value(std::to_string(_full_image_width).c_str());

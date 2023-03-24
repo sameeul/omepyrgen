@@ -19,8 +19,11 @@ struct ImageSegment{
 class OmeTiffCollToZarr{
 
 public:
+
     OmeTiffCollToZarr(const std::string& input_dir,
-                      const std::string& stitching_file);
+                      const std::string& stitching_file):
+        _input_dir(input_dir),
+        _stitching_file(stitching_file){}
 
     void Assemble(const std::string& output_file, const std::string& scale_key, VisType v, BS::thread_pool& th_pool);
     std::int64_t image_height() {return _full_image_height;}
