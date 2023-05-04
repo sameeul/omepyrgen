@@ -33,15 +33,20 @@ using ::tensorstore::Context;
 using ::tensorstore::internal_zarr::ChooseBaseDType;
 using namespace std::chrono_literals;
 
-void ChunkedBaseToPyramid::CreatePyramidImages(VisType v, BS::thread_pool& th_pool)
+void ChunkedBaseToPyramid::CreatePyramidImages( const std::string& input_zarr_dir,
+                                                const std::string& output_root_dir, 
+                                                int base_scale_key,
+                                                int min_dim, 
+                                                VisType v, 
+                                                BS::thread_pool& th_pool)
 {
 
     int resolution = 1; // this gets doubled in each level up
     tensorstore::Spec input_spec{};
     if (v == VisType::TS_Zarr | v == VisType::Viv){
-      input_spec = GetZarrSpecToRead(_input_zarr_dir, std::to_string(_max_level));
+      input_spec = GetZarrSpecToRead(input_zarr_dir, std::to_string(base_scale_key));
     } else if (v == VisType::TS_NPC){
-      input_spec = GetNPCSpecToRead(_input_zarr_dir, std::to_string(_max_level));
+      input_spec = GetNPCSpecToRead(input_zarr_dir, std::to_string(base_scale_key));
     }
 
     TENSORSTORE_CHECK_OK_AND_ASSIGN(auto test_store, tensorstore::Open(
@@ -49,40 +54,56 @@ void ChunkedBaseToPyramid::CreatePyramidImages(VisType v, BS::thread_pool& th_po
                             tensorstore::OpenMode::open,
                             tensorstore::ReadWriteMode::read).result());
     auto data_type = GetDataTypeCode(test_store.dtype().name());
+    int x_ind, y_ind;
+    auto shape = test_store.domain().shape();
+        if (v == VisType::Viv){ //5D file
+        x_ind = 4;
+        y_ind = 3;
     
-    for (int i=_max_level; i>_min_level; --i){
+    } else if (v == VisType::TS_Zarr){ // 3D file
+        x_ind = 2;
+        y_ind = 1;
+    
+    } else if (v == VisType::TS_NPC ){ // 3D file
+        x_ind = 1;
+        y_ind = 0;
+    }
+    auto max_level = static_cast<int>(ceil(log2(std::max(shape[x_ind], shape[y_ind]))));
+    auto min_level = static_cast<int>(ceil(log2(min_dim)));
+    std::cout <<"Max level is " << max_level <<std::endl;
+    for (int i=max_level; i>min_level; --i){
         resolution *= 2;
 
         switch(data_type){
           case 1:
-            WriteDownsampledImage<uint8_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            WriteDownsampledImage<uint8_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i-1), resolution, v, th_pool);
             break;
           case 2:
-            WriteDownsampledImage<uint16_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            WriteDownsampledImage<uint16_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i-1), resolution, v, th_pool);
             break;
           case 4:
-            WriteDownsampledImage<uint32_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            WriteDownsampledImage<uint32_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i-1), resolution, v, th_pool);
             break;
           case 8:
-            WriteDownsampledImage<uint64_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            WriteDownsampledImage<uint64_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i-1), resolution, v, th_pool);
             break;
           case 16:
-            WriteDownsampledImage<int8_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            WriteDownsampledImage<int8_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i-1), resolution, v, th_pool);
             break;
           case 32:
-            WriteDownsampledImage<int16_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            WriteDownsampledImage<int16_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i-1), resolution, v, th_pool);
             break;
           case 64:
-            WriteDownsampledImage<int32_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            WriteDownsampledImage<int32_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i-1), resolution, v, th_pool);
             break;
           case 128:
-            WriteDownsampledImage<int64_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            WriteDownsampledImage<int64_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i-1), resolution, v, th_pool);
             break;
           case 256:
-            WriteDownsampledImage<float>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            WriteDownsampledImage<float>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i-1), resolution, v, th_pool);
             break;
           case 512:
-            WriteDownsampledImage<double>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            WriteDownsampledImage<double>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i-1), resolution, v, th_pool);
             break;
           default:
             break;

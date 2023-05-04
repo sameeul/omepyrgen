@@ -7,19 +7,17 @@
 class ChunkedBaseToPyramid{
 
 public:
-    ChunkedBaseToPyramid(   const std::string& input_zarr_dir,
-                            const std::string& output_root_dir, 
-                            int max_level, int min_level):
-        _input_zarr_dir(input_zarr_dir),
-        _output_root_dir(output_root_dir),
-        _max_level(max_level),
-        _min_level(min_level)
-        {}
-    void CreatePyramidImages(VisType v, BS::thread_pool& th_pool);
+    ChunkedBaseToPyramid(){}
+    void CreatePyramidImages(   const std::string& input_zarr_dir,
+                                const std::string& output_root_dir, 
+                                int base_scale_key,
+                                int min_dim, 
+                                VisType v, 
+                                BS::thread_pool& th_pool);
 
 private:
-    std::string _input_zarr_dir, _output_root_dir;
-    int _max_level, _min_level;
+    //std::string _input_zarr_dir, _output_root_dir;
+    //int _max_level, _min_level;
     std::int64_t _chunk_size = 1080; // need to retrive this dynamically !
 
     template<typename T>

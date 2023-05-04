@@ -55,9 +55,9 @@ void test_zarr_pyramid_gen(){
     std::string input_zarr_dir = "/home/samee/axle/data/test_assembly";
     std::string output_root_dir = "/home/samee/axle/data/test_assembly_out";
     auto t1 = std::chrono::high_resolution_clock::now();
-    auto zarr_pyr_gen = ChunkedBaseToPyramid(input_zarr_dir, output_root_dir, 17, 10 );
+    auto zarr_pyr_gen = ChunkedBaseToPyramid();
     BS::thread_pool th_pool;
-    zarr_pyr_gen.CreatePyramidImages(VisType::Viv, th_pool);
+    zarr_pyr_gen.CreatePyramidImages(input_zarr_dir, output_root_dir, 17, 1024, VisType::Viv, th_pool);
     auto t2 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> et1 = t2-t1;
     std::cout << "time for base image: "<< et1.count() << std::endl;
@@ -82,7 +82,7 @@ void test_ome_tiff_coll_to_zarr_pyramid_gen(){
     std::string output_dir = "/home/samee/axle/data/test_assembly_out";
     auto t1 = std::chrono::high_resolution_clock::now();
     auto zarr_pyr_gen = OmeTiffToChunkedPyramid();
-    zarr_pyr_gen.GenerateFromCollection(input_dir, stitch_vector, image_name, output_dir, 1024, VisType::Viv);
+    zarr_pyr_gen.GenerateFromCollection(input_dir, stitch_vector, image_name, output_dir, 1024, VisType::TS_NPC);
     auto t2 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> et1 = t2-t1;
     std::cout << "time for base image: "<< et1.count() << std::endl;
