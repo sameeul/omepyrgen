@@ -4,10 +4,10 @@
 #include "BS_thread_pool.hpp"
 #include "utilities.h"
 
-class ZarrBaseToPyramidGen{
+class ChunkedBaseToPyramid{
 
 public:
-    ZarrBaseToPyramidGen(   const std::string& input_zarr_dir,
+    ChunkedBaseToPyramid(   const std::string& input_zarr_dir,
                             const std::string& output_root_dir, 
                             int max_level, int min_level):
         _input_zarr_dir(input_zarr_dir),

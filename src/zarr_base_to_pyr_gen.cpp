@@ -33,7 +33,7 @@ using ::tensorstore::Context;
 using ::tensorstore::internal_zarr::ChooseBaseDType;
 using namespace std::chrono_literals;
 
-void ZarrBaseToPyramidGen::CreatePyramidImages(VisType v, BS::thread_pool& th_pool)
+void ChunkedBaseToPyramid::CreatePyramidImages(VisType v, BS::thread_pool& th_pool)
 {
 
     int resolution = 1; // this gets doubled in each level up
@@ -91,7 +91,7 @@ void ZarrBaseToPyramidGen::CreatePyramidImages(VisType v, BS::thread_pool& th_po
 }
 
 template <typename T>
-void ZarrBaseToPyramidGen::WriteDownsampledImage(   const std::string& input_file, const std::string& input_scale_key, 
+void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_file, const std::string& input_scale_key, 
                                                     const std::string& output_file, const std::string& output_scale_key,
                                                     int resolution, VisType v, BS::thread_pool& th_pool)
 {

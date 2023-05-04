@@ -38,7 +38,12 @@ using ::tensorstore::internal_zarr::ChooseBaseDType;
 
 
 
-void OmeTiffCollToZarr::Assemble(const std::string& output_file, const std::string& scale_key, VisType v, BS::thread_pool& th_pool)
+void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
+                                    const std::string& stitching_file,
+                                    const std::string& output_file, 
+                                    const std::string& scale_key, 
+                                    VisType v, 
+                                    BS::thread_pool& th_pool)
 {
   std::regex match_str(
       "file:\\s(\\S+);[\\s|\\S]+position:\\s\\((\\d+),\\s(\\d+)\\);[\\s|\\S]+grid:\\s\\((\\d+),\\s(\\d+)\\);");
@@ -47,14 +52,14 @@ void OmeTiffCollToZarr::Assemble(const std::string& output_file, const std::stri
   std::string line;
   std::smatch pieces_match;
   int grid_x_max = 0, grid_y_max = 0;
-  _image_vec.clear();
+  std::vector<ImageSegment> image_vec;
   _chunk_size_x = 0;
   _chunk_size_y = 0;
   _full_image_width = 0;
   _full_image_height = 0;
 
   std::fstream stitch_vec;
-  stitch_vec.open(_stitching_file, std::ios::in);
+  stitch_vec.open(stitching_file, std::ios::in);
   if(!stitch_vec.is_open()){
     std::cout<<"Stitching vector not found!"<<std::endl;
     
@@ -68,7 +73,7 @@ void OmeTiffCollToZarr::Assemble(const std::string& output_file, const std::stri
           auto gy = std::stoi(pieces_match[5].str());
           gx > grid_x_max ? grid_x_max = gx : grid_x_max = grid_x_max;
           gy > grid_y_max ? grid_y_max = gy : grid_y_max = grid_y_max;
-          _image_vec.emplace_back(fname, gx, gy);   
+          image_vec.emplace_back(fname, gx, gy);   
         }
       }
     }
@@ -92,11 +97,12 @@ void OmeTiffCollToZarr::Assemble(const std::string& output_file, const std::stri
     num_dims = 3;
   }
 
-  if (_image_vec.size() != 0){
+  if (image_vec.size() != 0){
     std::list<tensorstore::WriteFutures> pending_writes;
     size_t write_failed_count = 0;
+    sample_tiff_file = input_dir + "/" + image_vec[0].file_name;
     TENSORSTORE_CHECK_OK_AND_ASSIGN(auto test_source, tensorstore::Open(
-                    GetOmeTiffSpecToRead( _input_dir + "/" + _image_vec[0].file_name),
+                    GetOmeTiffSpecToRead(sample_tiff_file),
                     tensorstore::OpenMode::open,
                     tensorstore::ReadWriteMode::read).result());
     auto test_image_shape = test_source.domain().shape();
@@ -129,11 +135,11 @@ void OmeTiffCollToZarr::Assemble(const std::string& output_file, const std::stri
                                 tensorstore::OpenMode::delete_existing,
                                 tensorstore::ReadWriteMode::write).result());
     
-    for(const auto& i: _image_vec){        
-      th_pool.push_task([&dest, i, x_dim, y_dim, this, &pending_writes, v](){
+    for(const auto& i: image_vec){        
+      th_pool.push_task([&dest, &input_dir, i, x_dim, y_dim, this, &pending_writes, v](){
 
         TENSORSTORE_CHECK_OK_AND_ASSIGN(auto source, tensorstore::Open(
-                                    GetOmeTiffSpecToRead(this->_input_dir + "/" + i.file_name),
+                                    GetOmeTiffSpecToRead(input_dir + "/" + i.file_name),
                                     tensorstore::OpenMode::open,
                                     tensorstore::ReadWriteMode::read).result());
 
@@ -202,33 +208,30 @@ void OmeTiffCollToZarr::Assemble(const std::string& output_file, const std::stri
 
 }
 
-void OmeTiffCollToZarr::GenerateOmeXML(const std::string& image_name, const std::string& output_file){
-    if(_image_vec.size() !=0){
-        auto tiff_file_path = _input_dir + "/" + _image_vec[0].file_name;
-        TIFF *tiff_ = TIFFOpen(tiff_file_path.c_str(), "r");
-        if (tiff_ != nullptr) {
-            char* infobuf;
-            TIFFGetField(tiff_, TIFFTAG_IMAGEDESCRIPTION , &infobuf);
-            pugi::xml_document doc;
-            pugi::xml_parse_result result = doc.load_string(infobuf);
-            TIFFClose(tiff_);
-            if (result){
-                doc.child("OME").child("Image").attribute("ID").set_value(image_name.c_str());
-                doc.child("OME").child("Image").attribute("Name").set_value(image_name.c_str());
-                doc.child("OME").child("Image").child("Pixels").attribute("SizeX").set_value(std::to_string(_full_image_width).c_str());
-                doc.child("OME").child("Image").child("Pixels").attribute("SizeY").set_value(std::to_string(_full_image_height).c_str());
+void OmeTiffCollToChunked::GenerateOmeXML(const std::string& image_name, const std::string& output_file){
+    TIFF *tiff_ = TIFFOpen(sample_tiff_file.c_str(), "r");
+    if (tiff_ != nullptr) {
+        char* infobuf;
+        TIFFGetField(tiff_, TIFFTAG_IMAGEDESCRIPTION , &infobuf);
+        pugi::xml_document doc;
+        pugi::xml_parse_result result = doc.load_string(infobuf);
+        TIFFClose(tiff_);
+        if (result){
+            doc.child("OME").child("Image").attribute("ID").set_value(image_name.c_str());
+            doc.child("OME").child("Image").attribute("Name").set_value(image_name.c_str());
+            doc.child("OME").child("Image").child("Pixels").attribute("SizeX").set_value(std::to_string(_full_image_width).c_str());
+            doc.child("OME").child("Image").child("Pixels").attribute("SizeY").set_value(std::to_string(_full_image_height).c_str());
 
-                for(pugi::xml_node& annotation : doc.child("OME").child("StructuredAnnotations")){
-                    std::string key = annotation.child("Value").child("OriginalMetadata").child("Key").child_value();
-                    if (key == "ImageWidth"){
-                        annotation.child("Value").child("OriginalMetadata").child("Value").first_child().set_value(std::to_string(_full_image_width).c_str());
-                    } else if (key == "ImageLength"){
-                        annotation.child("Value").child("OriginalMetadata").child("Value").first_child().set_value(std::to_string(_full_image_height).c_str());
-                    }
+            for(pugi::xml_node& annotation : doc.child("OME").child("StructuredAnnotations")){
+                std::string key = annotation.child("Value").child("OriginalMetadata").child("Key").child_value();
+                if (key == "ImageWidth"){
+                    annotation.child("Value").child("OriginalMetadata").child("Value").first_child().set_value(std::to_string(_full_image_width).c_str());
+                } else if (key == "ImageLength"){
+                    annotation.child("Value").child("OriginalMetadata").child("Value").first_child().set_value(std::to_string(_full_image_height).c_str());
                 }
             }
-            doc.save_file(output_file.c_str());
         }
+        doc.save_file(output_file.c_str());
     }
 
 }
