@@ -92,7 +92,7 @@ with open("README.md", "r") as fh:
 
 
 setup(
-    name="bfio2",
+    name="omepyrgen",
     version=versioneer.get_version(),
     cmdclass=versioneer.get_cmdclass(dict(build_ext=CMakeBuild)),
     author="Sameeul Bashir Samee",
