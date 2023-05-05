@@ -33,15 +33,20 @@ using ::tensorstore::Context;
 using ::tensorstore::internal_zarr::ChooseBaseDType;
 using namespace std::chrono_literals;
 
-void ZarrBaseToPyramidGen::CreatePyramidImages(VisType v, BS::thread_pool& th_pool)
+void ChunkedBaseToPyramid::CreatePyramidImages( const std::string& input_zarr_dir,
+                                                const std::string& output_root_dir, 
+                                                int base_level_key,
+                                                int min_dim, 
+                                                VisType v, 
+                                                BS::thread_pool& th_pool)
 {
 
     int resolution = 1; // this gets doubled in each level up
     tensorstore::Spec input_spec{};
     if (v == VisType::TS_Zarr | v == VisType::Viv){
-      input_spec = GetZarrSpecToRead(_input_zarr_dir, std::to_string(_max_level));
+      input_spec = GetZarrSpecToRead(input_zarr_dir, std::to_string(base_level_key));
     } else if (v == VisType::TS_NPC){
-      input_spec = GetNPCSpecToRead(_input_zarr_dir, std::to_string(_max_level));
+      input_spec = GetNPCSpecToRead(input_zarr_dir, std::to_string(base_level_key));
     }
 
     TENSORSTORE_CHECK_OK_AND_ASSIGN(auto test_store, tensorstore::Open(
@@ -49,40 +54,57 @@ void ZarrBaseToPyramidGen::CreatePyramidImages(VisType v, BS::thread_pool& th_po
                             tensorstore::OpenMode::open,
                             tensorstore::ReadWriteMode::read).result());
     auto data_type = GetDataTypeCode(test_store.dtype().name());
-    
-    for (int i=_max_level; i>_min_level; --i){
-        resolution *= 2;
+    int x_ind, y_ind;
+    auto shape = test_store.domain().shape();
 
+    if (v == VisType::Viv){ //5D file
+        x_ind = 4;
+        y_ind = 3;
+    
+    } else if (v == VisType::TS_Zarr){ // 3D file
+        x_ind = 2;
+        y_ind = 1;
+    
+    } else if (v == VisType::TS_NPC ){ // 3D file
+        x_ind = 1;
+        y_ind = 0;
+    }
+    auto max_level = static_cast<int>(ceil(log2(std::max(shape[x_ind], shape[y_ind]))));
+    auto min_level = static_cast<int>(ceil(log2(min_dim)));
+    auto max_key = max_level-min_level+1+base_level_key;
+
+    for (int i=base_level_key; i<max_key; ++i){
+        resolution *= 2;
         switch(data_type){
           case 1:
-            WriteDownsampledImage<uint8_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            WriteDownsampledImage<uint8_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, th_pool);
             break;
           case 2:
-            WriteDownsampledImage<uint16_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            WriteDownsampledImage<uint16_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, th_pool);
             break;
           case 4:
-            WriteDownsampledImage<uint32_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            WriteDownsampledImage<uint32_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, th_pool);
             break;
           case 8:
-            WriteDownsampledImage<uint64_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            WriteDownsampledImage<uint64_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, th_pool);
             break;
           case 16:
-            WriteDownsampledImage<int8_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            WriteDownsampledImage<int8_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, th_pool);
             break;
           case 32:
-            WriteDownsampledImage<int16_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            WriteDownsampledImage<int16_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, th_pool);
             break;
           case 64:
-            WriteDownsampledImage<int32_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            WriteDownsampledImage<int32_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, th_pool);
             break;
           case 128:
-            WriteDownsampledImage<int64_t>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            WriteDownsampledImage<int64_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, th_pool);
             break;
           case 256:
-            WriteDownsampledImage<float>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            WriteDownsampledImage<float>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, th_pool);
             break;
           case 512:
-            WriteDownsampledImage<double>(_input_zarr_dir, std::to_string(i), _output_root_dir, std::to_string(i-1), resolution, v, th_pool);
+            WriteDownsampledImage<double>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, th_pool);
             break;
           default:
             break;
@@ -91,7 +113,7 @@ void ZarrBaseToPyramidGen::CreatePyramidImages(VisType v, BS::thread_pool& th_po
 }
 
 template <typename T>
-void ZarrBaseToPyramidGen::WriteDownsampledImage(   const std::string& input_file, const std::string& input_scale_key, 
+void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_file, const std::string& input_scale_key, 
                                                     const std::string& output_file, const std::string& output_scale_key,
                                                     int resolution, VisType v, BS::thread_pool& th_pool)
 {
@@ -124,7 +146,7 @@ void ZarrBaseToPyramidGen::WriteDownsampledImage(   const std::string& input_fil
                             tensorstore::OpenMode::open,
                             tensorstore::ReadWriteMode::read).result());
     auto prev_image_shape = store1.domain().shape();
-    //auto chunk_shape = store1.chunk_layout().read_chunk_shape();
+    auto read_chunk_shape = store1.chunk_layout().value().read_chunk_shape();
 
     TENSORSTORE_CHECK_OK_AND_ASSIGN(auto base_zarr_dtype,
                                         ChooseBaseDType(store1.dtype()));
@@ -134,17 +156,17 @@ void ZarrBaseToPyramidGen::WriteDownsampledImage(   const std::string& input_fil
     auto cur_x_max = static_cast<std::int64_t>(ceil(prev_x_max/2.0));
     auto cur_y_max = static_cast<std::int64_t>(ceil(prev_y_max/2.0));
 
-    auto num_rows = static_cast<std::int64_t>(ceil(1.0*cur_y_max/_chunk_size));
-    auto num_cols = static_cast<std::int64_t>(ceil(1.0*cur_x_max/_chunk_size));
-
-
-
     std::vector<std::int64_t> new_image_shape(num_dims,1);
     std::vector<std::int64_t> chunk_shape(num_dims,1);
+
     new_image_shape[y_dim] = cur_y_max;
     new_image_shape[x_dim] = cur_x_max;
-    chunk_shape[y_dim] = _chunk_size;
-    chunk_shape[x_dim] = _chunk_size;
+
+    chunk_shape[y_dim] = static_cast<std::int64_t>(read_chunk_shape[y_dim]);
+    chunk_shape[x_dim] = static_cast<std::int64_t>(read_chunk_shape[x_dim]);
+
+    auto num_rows = static_cast<std::int64_t>(ceil(1.0*cur_y_max/chunk_shape[y_dim]));
+    auto num_cols = static_cast<std::int64_t>(ceil(1.0*cur_x_max/chunk_shape[x_dim]));
 
     tensorstore::Spec output_spec{};
     auto open_mode = tensorstore::OpenMode::create;
@@ -161,14 +183,14 @@ void ZarrBaseToPyramidGen::WriteDownsampledImage(   const std::string& input_fil
                             open_mode,
                             tensorstore::ReadWriteMode::write).result());
     for(std::int64_t i=0; i<num_rows; ++i){
-        auto y_start = i*_chunk_size;
-        auto y_end = std::min({(i+1)*_chunk_size, cur_y_max});
+        auto y_start = i*chunk_shape[y_dim];
+        auto y_end = std::min({(i+1)*chunk_shape[y_dim], cur_y_max});
 
         auto prev_y_start = 2*y_start;
         auto prev_y_end = std::min({2*y_end, prev_y_max});
         for(std::int64_t j=0; j<num_cols; ++j){
-            auto x_start = j*_chunk_size;
-            auto x_end = std::min({(j+1)*_chunk_size, cur_x_max});
+            auto x_start = j*chunk_shape[x_dim];
+            auto x_end = std::min({(j+1)*chunk_shape[x_dim], cur_x_max});
             auto prev_x_start = 2*x_start;
             auto prev_x_end = std::min({2*x_end, prev_x_max});
             

@@ -36,21 +36,30 @@ namespace fs = std::filesystem;
 using ::tensorstore::Context;
 using ::tensorstore::internal_zarr::ChooseBaseDType;
 
-OmeTiffCollToZarr::OmeTiffCollToZarr(const std::string& input_dir,
-                      const std::string& stitching_file):
-        _input_dir(input_dir),
-        _stitching_file(stitching_file){
+
+
+void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
+                                    const std::string& stitching_file,
+                                    const std::string& output_file, 
+                                    const std::string& scale_key, 
+                                    VisType v, 
+                                    BS::thread_pool& th_pool)
+{
   std::regex match_str(
       "file:\\s(\\S+);[\\s|\\S]+position:\\s\\((\\d+),\\s(\\d+)\\);[\\s|\\S]+grid:\\s\\((\\d+),\\s(\\d+)\\);");
   
 
   std::string line;
   std::smatch pieces_match;
-
-  // find final image size 
+  int grid_x_max = 0, grid_y_max = 0;
+  std::vector<ImageSegment> image_vec;
+  _chunk_size_x = 0;
+  _chunk_size_y = 0;
+  _full_image_width = 0;
+  _full_image_height = 0;
 
   std::fstream stitch_vec;
-  stitch_vec.open(_stitching_file, std::ios::in);
+  stitch_vec.open(stitching_file, std::ios::in);
   if(!stitch_vec.is_open()){
     std::cout<<"Stitching vector not found!"<<std::endl;
     
@@ -62,41 +71,13 @@ OmeTiffCollToZarr::OmeTiffCollToZarr(const std::string& input_dir,
           auto fname = pieces_match[1].str();
           auto gx = std::stoi(pieces_match[4].str());
           auto gy = std::stoi(pieces_match[5].str());
-          _image_vec.emplace_back(fname, gx, gy);   
+          gx > grid_x_max ? grid_x_max = gx : grid_x_max = grid_x_max;
+          gy > grid_y_max ? grid_y_max = gy : grid_y_max = grid_y_max;
+          image_vec.emplace_back(fname, gx, gy);   
         }
       }
     }
-
-    if (_image_vec.size() != 0){
-      TENSORSTORE_CHECK_OK_AND_ASSIGN(auto test_source, tensorstore::Open(
-                          GetOmeTiffSpecToRead( _input_dir + "/" + _image_vec[0].file_name),
-                          tensorstore::OpenMode::open,
-                          tensorstore::ReadWriteMode::read).result());
-
-      TENSORSTORE_CHECK_OK_AND_ASSIGN(auto base_zarr_dtype,
-                                          ChooseBaseDType(test_source.dtype()));
-      auto test_image_shape = test_source.domain().shape();
-      _chunk_size_x = test_image_shape[4];
-      _chunk_size_y = test_image_shape[3];
-
-
-      int grid_x_max = 0, grid_y_max = 0;
-
-      for(auto &i: _image_vec){
-        i._x_grid > grid_x_max ? grid_x_max = i._x_grid : grid_x_max = grid_x_max;
-        i._y_grid > grid_y_max ? grid_y_max = i._x_grid : grid_y_max = grid_y_max;
-      }
-
-      _full_image_width = (grid_x_max+1)*_chunk_size_x;
-      _full_image_height = (grid_y_max+1)*_chunk_size_y;
-    }
-
   }
-}
-
-void OmeTiffCollToZarr::Assemble(const std::string& output_file, const std::string& scale_key, VisType v, BS::thread_pool& th_pool)
-{
-
   auto t1 = std::chrono::high_resolution_clock::now();
   int num_dims, x_dim, y_dim;
 
@@ -116,27 +97,32 @@ void OmeTiffCollToZarr::Assemble(const std::string& output_file, const std::stri
     num_dims = 3;
   }
 
-  if (_image_vec.size() != 0){
+  if (image_vec.size() != 0){
     std::list<tensorstore::WriteFutures> pending_writes;
     size_t write_failed_count = 0;
-
-
-
+    sample_tiff_file = input_dir + "/" + image_vec[0].file_name;
+    TENSORSTORE_CHECK_OK_AND_ASSIGN(auto test_source, tensorstore::Open(
+                    GetOmeTiffSpecToRead(sample_tiff_file),
+                    tensorstore::OpenMode::open,
+                    tensorstore::ReadWriteMode::read).result());
+    auto test_image_shape = test_source.domain().shape();
+    _chunk_size_x = test_image_shape[4];
+    _chunk_size_y = test_image_shape[3];
+    _full_image_width = (grid_x_max+1)*_chunk_size_x;
+    _full_image_height = (grid_y_max+1)*_chunk_size_y;
+    
+    TENSORSTORE_CHECK_OK_AND_ASSIGN(auto base_zarr_dtype,
+                                        ChooseBaseDType(test_source.dtype()));
+    
+    tensorstore::Spec output_spec{};
+    
     std::vector<std::int64_t> new_image_shape(num_dims,1);
     std::vector<std::int64_t> chunk_shape(num_dims,1);
     new_image_shape[y_dim] = _full_image_height;
     new_image_shape[x_dim] = _full_image_width;
     chunk_shape[y_dim] = _chunk_size_y;
     chunk_shape[x_dim] = _chunk_size_x;
-    TENSORSTORE_CHECK_OK_AND_ASSIGN(auto test_source, tensorstore::Open(
-                    GetOmeTiffSpecToRead( _input_dir + "/" + _image_vec[0].file_name),
-                    tensorstore::OpenMode::open,
-                    tensorstore::ReadWriteMode::read).result());
-
-    TENSORSTORE_CHECK_OK_AND_ASSIGN(auto base_zarr_dtype,
-                                        ChooseBaseDType(test_source.dtype()));
-    tensorstore::Spec output_spec{};
-  
+    
     if (v == VisType::TS_Zarr | v == VisType::Viv){
       output_spec = GetZarrSpecToWrite(output_file + "/" + scale_key, new_image_shape, chunk_shape, base_zarr_dtype.encoded_dtype);
     } else if (v == VisType::TS_NPC){
@@ -149,11 +135,11 @@ void OmeTiffCollToZarr::Assemble(const std::string& output_file, const std::stri
                                 tensorstore::OpenMode::delete_existing,
                                 tensorstore::ReadWriteMode::write).result());
     
-    for(const auto& i: _image_vec){        
-      th_pool.push_task([&dest, i, x_dim, y_dim, this, &pending_writes, v](){
+    for(const auto& i: image_vec){        
+      th_pool.push_task([&dest, &input_dir, i, x_dim, y_dim, this, &pending_writes, v](){
 
         TENSORSTORE_CHECK_OK_AND_ASSIGN(auto source, tensorstore::Open(
-                                    GetOmeTiffSpecToRead(this->_input_dir + "/" + i.file_name),
+                                    GetOmeTiffSpecToRead(input_dir + "/" + i.file_name),
                                     tensorstore::OpenMode::open,
                                     tensorstore::ReadWriteMode::read).result());
 
@@ -222,34 +208,30 @@ void OmeTiffCollToZarr::Assemble(const std::string& output_file, const std::stri
 
 }
 
-void OmeTiffCollToZarr::GenerateOmeXML(const std::string& image_name, const std::string& output_file){
-    if(_image_vec.size() !=0){
-        auto tiff_file_path = _input_dir + "/" + _image_vec[0].file_name;
-        TIFF *tiff_ = TIFFOpen(tiff_file_path.c_str(), "r");
-        if (tiff_ != nullptr) {
-            char* infobuf;
-            TIFFGetField(tiff_, TIFFTAG_IMAGEDESCRIPTION , &infobuf);
-            pugi::xml_document doc;
-            pugi::xml_parse_result result = doc.load_string(infobuf);
-            TIFFClose(tiff_);
-            if (result){
+void OmeTiffCollToChunked::GenerateOmeXML(const std::string& image_name, const std::string& output_file){
+    TIFF *tiff_ = TIFFOpen(sample_tiff_file.c_str(), "r");
+    if (tiff_ != nullptr) {
+        char* infobuf;
+        TIFFGetField(tiff_, TIFFTAG_IMAGEDESCRIPTION , &infobuf);
+        pugi::xml_document doc;
+        pugi::xml_parse_result result = doc.load_string(infobuf);
+        TIFFClose(tiff_);
+        if (result){
+            doc.child("OME").child("Image").attribute("ID").set_value(image_name.c_str());
+            doc.child("OME").child("Image").attribute("Name").set_value(image_name.c_str());
+            doc.child("OME").child("Image").child("Pixels").attribute("SizeX").set_value(std::to_string(_full_image_width).c_str());
+            doc.child("OME").child("Image").child("Pixels").attribute("SizeY").set_value(std::to_string(_full_image_height).c_str());
 
-                doc.child("OME").child("Image").attribute("ID").set_value(image_name.c_str());
-                doc.child("OME").child("Image").attribute("Name").set_value(image_name.c_str());
-                doc.child("OME").child("Image").child("Pixels").attribute("SizeX").set_value(std::to_string(_full_image_width).c_str());
-                doc.child("OME").child("Image").child("Pixels").attribute("SizeY").set_value(std::to_string(_full_image_height).c_str());
-
-                for(pugi::xml_node& annotation : doc.child("OME").child("StructuredAnnotations")){
-                    std::string key = annotation.child("Value").child("OriginalMetadata").child("Key").child_value();
-                    if (key == "ImageWidth"){
-                        annotation.child("Value").child("OriginalMetadata").child("Value").first_child().set_value(std::to_string(_full_image_width).c_str());
-                    } else if (key == "ImageLength"){
-                        annotation.child("Value").child("OriginalMetadata").child("Value").first_child().set_value(std::to_string(_full_image_height).c_str());
-                    }
+            for(pugi::xml_node& annotation : doc.child("OME").child("StructuredAnnotations")){
+                std::string key = annotation.child("Value").child("OriginalMetadata").child("Key").child_value();
+                if (key == "ImageWidth"){
+                    annotation.child("Value").child("OriginalMetadata").child("Value").first_child().set_value(std::to_string(_full_image_width).c_str());
+                } else if (key == "ImageLength"){
+                    annotation.child("Value").child("OriginalMetadata").child("Value").first_child().set_value(std::to_string(_full_image_height).c_str());
                 }
             }
-            doc.save_file(output_file.c_str());
         }
+        doc.save_file(output_file.c_str());
     }
 
 }

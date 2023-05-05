@@ -10,9 +10,9 @@
 #include "utilities.h"
 #include "BS_thread_pool.hpp"
 
-class OmeTifftoZarrPyramid{
+class OmeTiffToChunkedPyramid{
 public:
-    OmeTifftoZarrPyramid(){}
+    OmeTiffToChunkedPyramid(){}
     void GenerateFromSingleFile(const std::string& input_file, const std::string& output_dir, 
                                 int min_dim, VisType v);
     void GenerateFromCollection(const std::string& collection_path, const std::string& stitch_vector_file,
@@ -20,22 +20,22 @@ public:
                                 int min_dim, VisType v);
 
 private:
-    std::string _input_file, _output_dir;
     std::unique_ptr<OmeTiffToZarrConverter> _zpw_ptr = nullptr;
-    std::unique_ptr<ZarrBaseToPyramidGen> _zpg_ptr = nullptr;
-    std::unique_ptr<OmeTiffCollToZarr> _tiff_coll_to_zarr_ptr = nullptr;
-    int _max_level, _min_level;
+    std::unique_ptr<ChunkedBaseToPyramid> _zpg_ptr = nullptr;
+    std::unique_ptr<OmeTiffCollToChunked> _tiff_coll_to_zarr_ptr = nullptr;
     BS::thread_pool _th_pool;
 
     void WriteMultiscaleMetadataForImageCollection( const std::string& input_file, 
                                                     const std::string& output_dir,
+                                                    int min_level, int max_level,
                                                     VisType v);
     void WriteMultiscaleMetadataForSingleFile(  const std::string& input_file, 
                                                 const std::string& output_dir,
+                                                int min_level, int max_level,
                                                 VisType v);
     void ExtractAndWriteXML(const std::string& input_file, const std::string& xml_loc);
-    void WriteTSZattrFile(const std::string& tiff_file_name, const std::string& zattr_file_loc);
-    void WriteVivZattrFile(const std::string& tiff_file_name, const std::string& zattr_file_loc);
+    void WriteTSZattrFile(const std::string& tiff_file_name, const std::string& zattr_file_loc, int min_level, int max_level);
+    void WriteVivZattrFile(const std::string& tiff_file_name, const std::string& zattr_file_loc, int min_level, int max_level);
     void WriteVivZgroupFiles(const std::string& output_dir);
      
 };

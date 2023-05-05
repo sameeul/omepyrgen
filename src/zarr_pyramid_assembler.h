@@ -16,20 +16,25 @@ struct ImageSegment{
 
 };
 
-class OmeTiffCollToZarr{
+class OmeTiffCollToChunked{
 
 public:
-    OmeTiffCollToZarr(const std::string& input_dir,
-                      const std::string& stitching_file);
 
-    void Assemble(const std::string& output_file, const std::string& scale_key, VisType v, BS::thread_pool& th_pool);
+    OmeTiffCollToChunked(){};
+
+    void Assemble(const std::string& input_dir,
+                  const std::string& stitching_file,
+                  const std::string& output_file, 
+                  const std::string& scale_key, 
+                  VisType v, 
+                  BS::thread_pool& th_pool);
     std::int64_t image_height() {return _full_image_height;}
     std::int64_t image_width() {return _full_image_width;}
     void GenerateOmeXML(const std::string& image_name, const std::string& output_file);
+    void Reset();
 
 private:
     std::int64_t _full_image_height, _full_image_width, _chunk_size_x, _chunk_size_y;
-    std::string _input_dir, _stitching_file;
-    std::vector<ImageSegment> _image_vec;
+    std::string sample_tiff_file;
 };
 
