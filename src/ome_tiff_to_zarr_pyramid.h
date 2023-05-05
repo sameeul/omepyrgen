@@ -20,11 +20,9 @@ public:
                                 int min_dim, VisType v);
 
 private:
-    //std::string _input_file, _output_dir;
     std::unique_ptr<OmeTiffToZarrConverter> _zpw_ptr = nullptr;
     std::unique_ptr<ChunkedBaseToPyramid> _zpg_ptr = nullptr;
     std::unique_ptr<OmeTiffCollToChunked> _tiff_coll_to_zarr_ptr = nullptr;
-    //int _max_level, _min_level;
     BS::thread_pool _th_pool;
 
     void WriteMultiscaleMetadataForImageCollection( const std::string& input_file, 
