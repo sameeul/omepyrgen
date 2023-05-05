@@ -24,14 +24,14 @@ void OmeTiffToChunkedPyramid::GenerateFromSingleFile(  const std::string& input_
             zarr_file_dir = zarr_file_dir + "/data.zarr/0";
         }
 
-        std::string base_zarr_file = zarr_file_dir + "/" + std::to_string(_max_level);
+        int base_level_key = 0;
         _zpw_ptr = std::make_unique<OmeTiffToZarrConverter>();
         std::cout << "Writing base zarr image..."<<std::endl;
-        _zpw_ptr->Convert(input_file, zarr_file_dir, std::to_string(_max_level), v, _th_pool);
+        _zpw_ptr->Convert(input_file, zarr_file_dir, std::to_string(base_level_key), v, _th_pool);
         std::cout << "Generating image pyramids..."<<std::endl;
         _zpg_ptr = std::make_unique<ChunkedBaseToPyramid>();
         _zpg_ptr->CreatePyramidImages(zarr_file_dir, zarr_file_dir,  
-                                    _max_level, min_dim, v, _th_pool);
+                                    0, min_dim, v, _th_pool);
         WriteMultiscaleMetadataForSingleFile(input_file, output_dir, v);
 
     }
@@ -179,11 +179,11 @@ void OmeTiffToChunkedPyramid::GenerateFromCollection(
         zarr_file_dir = zarr_file_dir + "/data.zarr/0";
     }
 
-    std::string base_zarr_file = zarr_file_dir + "/" + std::to_string(_max_level);
+    int base_level_key = 0;
     std::cout << "Writing base zarr image..."<<std::endl;
-    _tiff_coll_to_zarr_ptr->Assemble(collection_path, stitch_vector_file, zarr_file_dir, std::to_string(_max_level), v, _th_pool);
+    _tiff_coll_to_zarr_ptr->Assemble(collection_path, stitch_vector_file, zarr_file_dir, std::to_string(base_level_key), v, _th_pool);
     std::cout << "Generating image pyramids..."<<std::endl;
     _zpg_ptr = std::make_unique<ChunkedBaseToPyramid>();
-    _zpg_ptr->CreatePyramidImages(zarr_file_dir, zarr_file_dir,_max_level, min_dim, v, _th_pool);
+    _zpg_ptr->CreatePyramidImages(zarr_file_dir, zarr_file_dir,base_level_key, min_dim, v, _th_pool);
     WriteMultiscaleMetadataForImageCollection(image_name, output_dir, v);
 }
