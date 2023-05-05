@@ -14,11 +14,5 @@ public:
                     const VisType v,
                     BS::thread_pool& th_pool
                 );
-
-    
-
-
-private:
-    std::int64_t _image_length, _image_width, _chunk_size = 1024;
 };
 
