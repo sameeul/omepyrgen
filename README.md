@@ -8,7 +8,7 @@ For Linux, these are the requirements:
 - `Clang` 8 or later
 - `Python` 3.8 or later
 - `CMake` 3.24 or later
-- `Perl`, for building libaom from source (default). Must be in `PATH`. Not required if `-DTENSORSTORE_USE_SYSTEM_LIBAOM=ON` is specified.
+- `Perl`, for building *libaom* from source (default). Must be in `PATH`. Not required if `-DTENSORSTORE_USE_SYSTEM_LIBAOM=ON` is specified.
 - `NASM`, for building *libjpeg-turbo*, *libaom*, and *dav1d* from source (default). Must be in `PATH`.Not required if `-DTENSORSTORE_USE_SYSTEM_{JPEG,LIBAOM,DAV1D}=ON` is specified.
 - `GNU Patch` or equivalent. Must be in `PATH`.
 
@@ -20,7 +20,7 @@ Here is an example of building and installing `OmePyrGen` in a Python virtual en
 python -m virtualenv venv
 source venv/bin/activate
 pip install cmake
-git clone https://github.com/sameeul/omepyrgen.git
+git clone --recurse-submodules https://github.com/sameeul/omepyrgen.git 
 cd omepyrgen
 python setup.py install
 ```
