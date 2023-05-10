@@ -6,10 +6,10 @@
 #include <iostream>
 #include <regex>
 #include <vector>
+#include <list>
 #include <cstring>
 #include <unordered_set>
 #include <string>
-#include <unistd.h>
 #include <stdint.h>
 #include <fstream>
 #include <iostream>
@@ -179,9 +179,9 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
     while( num_pass > 0){
       for (auto it = pending_writes.begin(); it != pending_writes.end();) {
         if (it->commit_future.ready()) {
-          if (!GetStatus(it->commit_future).ok()) {
+          if (!tensorstore::GetStatus(it->commit_future).ok()) {
             write_failed_count++;
-            std::cout << GetStatus(it->commit_future);
+            std::cout << tensorstore::GetStatus(it->commit_future);
           }
           count++;
           it = pending_writes.erase(it);
@@ -195,7 +195,7 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
     std::cout << "remaining stuff "<< pending_writes.size() << std::endl; 
     // force the rest of it to finish
     for (auto& front : pending_writes) {
-      if (!GetStatus(front.commit_future).ok()) {
+      if (!tensorstore::GetStatus(front.commit_future).ok()) {
         write_failed_count++;
       }
     }

@@ -8,7 +8,7 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
   endif()
   
-set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+set(CMAKE_CXX_FLAGS_RELEASE "-O2")
 set(SOURCE 
            src/ts_driver/tiled_tiff/omexml.cc
            src/ts_driver/tiled_tiff/tiled_tiff_key_value_store.cc
@@ -26,8 +26,8 @@ include(FetchContent)
 
 FetchContent_Declare(
   tensorstore
-  URL "https://github.com/google/tensorstore/archive/refs/tags/v0.1.31.tar.gz"
-  URL_HASH SHA256=b96ebf7151331eb273d08b1d9b82d1c7fc488a7754e690ba8fd14f6bda240f8f
+  URL "https://github.com/google/tensorstore/archive/refs/tags/v0.1.36.tar.gz"
+  URL_HASH SHA256=5857582b1b68e5a3f470d2ee8e9a7fa1ad6e6c7e0867c7c69e5a523ae00bc002
 )
 
 # Additional FetchContent_Declare calls as needed...
@@ -64,7 +64,11 @@ pybind11_add_module(libomepyrgen
 )
 
 target_compile_definitions(libomepyrgen PRIVATE WITH_PYTHON_H)
-target_link_libraries(libomepyrgen PRIVATE stdc++fs)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+	SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -fPIC")
+  target_link_libraries(libomepyrgen PRIVATE stdc++fs)
+endif()
+
 target_link_libraries(libomepyrgen PRIVATE tensorstore::tensorstore tensorstore::all_drivers)
 target_link_libraries(libomepyrgen PRIVATE ${Build_LIBRARIES})  
 
