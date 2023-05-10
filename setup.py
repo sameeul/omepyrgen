@@ -101,10 +101,10 @@ setup(
     description="Pyramid Generator For OMETiff",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    packages=find_packages("src/python/"),
+    packages=find_packages("src/python"),
     package_dir={"": "src/python"},
     ext_modules=[CMakeExtension("omepyrgen/libomepyrgen")],
     test_suite="tests",
     zip_safe=False,
-    python_requires=">=3.6",
+    python_requires=">=3.8",
 )

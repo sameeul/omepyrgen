@@ -3,7 +3,6 @@
 #include "utilities.h"
 
 #include <string>
-#include <unistd.h>
 #include <stdint.h>
 #include<typeinfo>
 #include <fstream>
