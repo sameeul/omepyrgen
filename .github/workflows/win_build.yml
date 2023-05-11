@@ -34,7 +34,7 @@ jobs:
     - name: Install Conda Dependencies
       working-directory: ${{github.workspace}}
       run: |
-        conda install cmake nasm sysroot_linux-64=2.17
+        conda install cmake nasm 
     - name: Build Library
       working-directory: ${{github.workspace}}
       run: CMAKE_ARGS="-DCMAKE_PREFIX_PATH=$CONDA_PREFIX -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX" python -m pip install . -vv
