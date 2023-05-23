@@ -24,6 +24,9 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@v1
         name: Add MSVS Path
 
+      - uses: ilammy/setup-nasm@v1
+        name: Add NASM
+
       - uses: actions/setup-python@v4
         name: Install Python
         with:
