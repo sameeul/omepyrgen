@@ -56,8 +56,8 @@ void OmeTiffToZarrConverter::Convert( const std::string& input_file, const std::
   std::vector<std::int64_t> chunk_shape(num_dims,1);
   new_image_shape[y_dim] = image_length;
   new_image_shape[x_dim] = image_width;
-  chunk_shape[y_dim] = read_chunk_shape[3];
-  chunk_shape[x_dim] = read_chunk_shape[4];
+  chunk_shape[y_dim] = static_cast<std::int64_t>(read_chunk_shape[3]);
+  chunk_shape[x_dim] = static_cast<std::int64_t>(read_chunk_shape[4]);
 
   auto num_rows = static_cast<std::int64_t>(ceil(1.0*image_length/chunk_shape[y_dim]));
   auto num_cols = static_cast<std::int64_t>(ceil(1.0*image_width/chunk_shape[x_dim]));
