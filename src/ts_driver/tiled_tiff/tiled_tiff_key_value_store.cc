@@ -76,12 +76,12 @@ using ::tensorstore::internal_file_util::LongestDirectoryPrefix;
 using ::tensorstore::internal_file_util::UniqueFileDescriptor;
 using ::tensorstore::kvstore::ReadResult;
 
-auto& tiled_tiff_bytes_read = internal_metrics::Counter<int64_t>::New(
-    "/tensorstore/kvstore/tiled_tiff/bytes_read",
-    "Bytes read by the tiled tiff kvstore driver");
+// auto& tiled_tiff_bytes_read = internal_metrics::Counter<int64_t>::New(
+//     "/tensorstore/kvstore/tiled_tiff/bytes_read",
+//     "Bytes read by the tiled tiff kvstore driver");
 
-auto& tiled_tiff_read = internal_metrics::Counter<int64_t>::New(
-    "/tensorstore/kvstore/tiled_tiff/read", "tiled tiff driver kvstore::Read calls");
+// auto& tiled_tiff_read = internal_metrics::Counter<int64_t>::New(
+//     "/tensorstore/kvstore/tiled_tiff/read", "tiled tiff driver kvstore::Read calls");
 
 absl::Status ValidateKey(std::string_view key) {
   if (!IsKeyValid(key, kLockSuffix)) {
@@ -285,7 +285,7 @@ struct ReadTask {
             TIFFClose(tiff_);      
             if (errcode != -1){
               read_result.state = ReadResult::kValue;
-              tiled_tiff_bytes_read.IncrementBy(errcode);
+              //tiled_tiff_bytes_read.IncrementBy(errcode);
               read_result.value = std::move(buffer).Build();
             } 
             else {
@@ -333,7 +333,7 @@ class TiledTiffKeyValueStore
                                                 TiledTiffKeyValueStoreSpec> {
  public:
   Future<ReadResult> Read(Key key, ReadOptions options) override {
-    tiled_tiff_read.Increment();
+    //tiled_tiff_read.Increment();
     TENSORSTORE_RETURN_IF_ERROR(ValidateKey(key));
     return MapFuture(executor(), ReadTask{std::move(key), std::move(options)});
   }
