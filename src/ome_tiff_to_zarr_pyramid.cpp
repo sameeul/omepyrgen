@@ -124,7 +124,11 @@ void OmeTiffToChunkedPyramid::WriteTSZattrFile(const std::string& tiff_file_name
     combined_metadata["name"] = tiff_file_name;
     combined_metadata["metadata"] = {{"method", "mean"}};
     json final_formated_metadata;
+#ifdef _WIN32
+    final_formated_metadata["multiscales"][0] = {combined_metadata};
+#else
     final_formated_metadata["multiscales"] = {combined_metadata};
+#endif
     std::ofstream f(zarr_root_dir + "/.zattrs",std::ios_base::trunc |std::ios_base::out);
     if (f.is_open()){
         f << final_formated_metadata;
@@ -148,7 +152,11 @@ void OmeTiffToChunkedPyramid::WriteVivZattrFile(const std::string& tiff_file_nam
     combined_metadata["name"] = tiff_file_name;
     combined_metadata["metadata"] = {{"method", "mean"}};
     json final_formated_metadata;
+#ifdef _WIN32
+    final_formated_metadata["multiscales"][0] = {combined_metadata};
+#else
     final_formated_metadata["multiscales"] = {combined_metadata};
+#endif    
     std::ofstream f(zattr_file_loc + "/.zattrs",std::ios_base::trunc |std::ios_base::out);
     if (f.is_open()){   
         f << final_formated_metadata;
