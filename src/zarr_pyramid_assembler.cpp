@@ -100,7 +100,7 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
   if (image_vec.size() != 0){
     std::list<tensorstore::WriteFutures> pending_writes;
     size_t write_failed_count = 0;
-    sample_tiff_file = input_dir + "/" + image_vec[0].file_name;
+    std::string sample_tiff_file = input_dir + "/" + image_vec[0].file_name;
     TENSORSTORE_CHECK_OK_AND_ASSIGN(auto test_source, tensorstore::Open(
                     GetOmeTiffSpecToRead(sample_tiff_file),
                     tensorstore::OpenMode::open,
@@ -209,29 +209,44 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
 }
 
 void OmeTiffCollToChunked::GenerateOmeXML(const std::string& image_name, const std::string& output_file){
-    TIFF *tiff_ = TIFFOpen(sample_tiff_file.c_str(), "r");
-    if (tiff_ != nullptr) {
-        char* infobuf;
-        TIFFGetField(tiff_, TIFFTAG_IMAGEDESCRIPTION , &infobuf);
-        pugi::xml_document doc;
-        pugi::xml_parse_result result = doc.load_string(infobuf);
-        TIFFClose(tiff_);
-        if (result){
-            doc.child("OME").child("Image").attribute("ID").set_value(image_name.c_str());
-            doc.child("OME").child("Image").attribute("Name").set_value(image_name.c_str());
-            doc.child("OME").child("Image").child("Pixels").attribute("SizeX").set_value(std::to_string(_full_image_width).c_str());
-            doc.child("OME").child("Image").child("Pixels").attribute("SizeY").set_value(std::to_string(_full_image_height).c_str());
 
-            for(pugi::xml_node& annotation : doc.child("OME").child("StructuredAnnotations")){
-                std::string key = annotation.child("Value").child("OriginalMetadata").child("Key").child_value();
-                if (key == "ImageWidth"){
-                    annotation.child("Value").child("OriginalMetadata").child("Value").first_child().set_value(std::to_string(_full_image_width).c_str());
-                } else if (key == "ImageLength"){
-                    annotation.child("Value").child("OriginalMetadata").child("Value").first_child().set_value(std::to_string(_full_image_height).c_str());
-                }
-            }
-        }
-        doc.save_file(output_file.c_str());
-    }
+    pugi::xml_document doc;
 
+    // Create the root element <OME>
+    pugi::xml_node omeNode = doc.append_child("OME");
+    
+    // Add the namespaces and attributes to the root element
+    omeNode.append_attribute("xmlns") = "http://www.openmicroscopy.org/Schemas/OME/2016-06";
+    omeNode.append_attribute("xmlns:xsi") = "http://www.w3.org/2001/XMLSchema-instance";
+    omeNode.append_attribute("Creator") = "OmePyrGen 0.0.1";
+    omeNode.append_attribute("UUID") = "urn:uuid:ce3367ae-0512-4e87-a045-20d87db14001";
+    omeNode.append_attribute("xsi:schemaLocation") = "http://www.openmicroscopy.org/Schemas/OME/2016-06 http://www.openmicroscopy.org/Schemas/OME/2016-06/ome.xsd";
+
+    // Create the <Image> element
+    pugi::xml_node imageNode = omeNode.append_child("Image");
+    imageNode.append_attribute("ID") = image_name.c_str();;
+    imageNode.append_attribute("Name") =image_name.c_str();
+
+    // Create the <Pixels> element
+    pugi::xml_node pixelsNode = imageNode.append_child("Pixels");
+    pixelsNode.append_attribute("BigEndian") = "false";
+    pixelsNode.append_attribute("DimensionOrder") = "XYZCT";
+    pixelsNode.append_attribute("ID") = "Pixels:0";
+    pixelsNode.append_attribute("Interleaved") = "false";
+    pixelsNode.append_attribute("SizeC") = "1";
+    pixelsNode.append_attribute("SizeT") = "1";
+    pixelsNode.append_attribute("SizeX") = std::to_string(_full_image_width).c_str();
+    pixelsNode.append_attribute("SizeY") = std::to_string(_full_image_height).c_str();
+    pixelsNode.append_attribute("SizeZ") = "1";
+    pixelsNode.append_attribute("Type") = "uint8";
+
+    // Create the <Channel> element
+    pugi::xml_node channelNode = pixelsNode.append_child("Channel");
+    channelNode.append_attribute("ID") = "Channel:0:0";
+    channelNode.append_attribute("SamplesPerPixel") = "1";
+
+    // Create the <LightPath> element
+    channelNode.append_child("LightPath");
+
+    doc.save_file(output_file.c_str());
 }
