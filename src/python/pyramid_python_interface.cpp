@@ -14,4 +14,10 @@ PYBIND11_MODULE(libomepyrgen, m) {
         .value("TS_NPC", VisType::TS_NPC)
         .value("Viv", VisType::Viv)
         .export_values();
+
+    py::enum_<DSType>(m, "DSType")
+        .value("Mode_Max", DSType::Mode_Max)
+        .value("Mode_Min", DSType::Mode_Min)
+        .value("Mean", DSType::Mean)
+        .export_values();
 }
