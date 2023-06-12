@@ -14,10 +14,10 @@ class OmeTiffToChunkedPyramid{
 public:
     OmeTiffToChunkedPyramid(){}
     void GenerateFromSingleFile(const std::string& input_file, const std::string& output_dir, 
-                                int min_dim, VisType v);
+                                int min_dim, VisType v, DSType ds);
     void GenerateFromCollection(const std::string& collection_path, const std::string& stitch_vector_file,
                                 const std::string& image_name, const std::string& output_dir, 
-                                int min_dim, VisType v);
+                                int min_dim, VisType v, DSType ds);
 
 private:
     std::unique_ptr<OmeTiffToZarrConverter> _zpw_ptr = nullptr;

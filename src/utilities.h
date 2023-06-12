@@ -9,6 +9,8 @@
 
 enum VisType {Viv, TS_Zarr, TS_NPC};
 
+enum class DSType {Mean, Mode_Max, Mode_Min};
+
 struct Point {
     std::int64_t x, y;
     Point(std::int64_t x, std::int64_t y): 

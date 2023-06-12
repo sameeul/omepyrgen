@@ -37,6 +37,7 @@ void ChunkedBaseToPyramid::CreatePyramidImages( const std::string& input_zarr_di
                                                 int base_level_key,
                                                 int min_dim, 
                                                 VisType v, 
+                                                DSType ds,
                                                 BS::thread_pool& th_pool)
 {
 
@@ -76,34 +77,34 @@ void ChunkedBaseToPyramid::CreatePyramidImages( const std::string& input_zarr_di
         resolution *= 2;
         switch(data_type){
           case 1:
-            WriteDownsampledImage<uint8_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, th_pool);
+            WriteDownsampledImage<uint8_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, ds, th_pool);
             break;
           case 2:
-            WriteDownsampledImage<uint16_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, th_pool);
+            WriteDownsampledImage<uint16_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, ds, th_pool);
             break;
           case 4:
-            WriteDownsampledImage<uint32_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, th_pool);
+            WriteDownsampledImage<uint32_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, ds, th_pool);
             break;
           case 8:
-            WriteDownsampledImage<uint64_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, th_pool);
+            WriteDownsampledImage<uint64_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, ds, th_pool);
             break;
           case 16:
-            WriteDownsampledImage<int8_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, th_pool);
+            WriteDownsampledImage<int8_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, ds, th_pool);
             break;
           case 32:
-            WriteDownsampledImage<int16_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, th_pool);
+            WriteDownsampledImage<int16_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, ds, th_pool);
             break;
           case 64:
-            WriteDownsampledImage<int32_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, th_pool);
+            WriteDownsampledImage<int32_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, ds, th_pool);
             break;
           case 128:
-            WriteDownsampledImage<int64_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, th_pool);
+            WriteDownsampledImage<int64_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, ds, th_pool);
             break;
           case 256:
-            WriteDownsampledImage<float>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, th_pool);
+            WriteDownsampledImage<float>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, ds, th_pool);
             break;
           case 512:
-            WriteDownsampledImage<double>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, th_pool);
+            WriteDownsampledImage<double>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, ds, th_pool);
             break;
           default:
             break;
@@ -114,7 +115,7 @@ void ChunkedBaseToPyramid::CreatePyramidImages( const std::string& input_zarr_di
 template <typename T>
 void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_file, const std::string& input_scale_key, 
                                                     const std::string& output_file, const std::string& output_scale_key,
-                                                    int resolution, VisType v, BS::thread_pool& th_pool)
+                                                    int resolution, VisType v, DSType ds, BS::thread_pool& th_pool)
 {
     int num_dims, x_dim, y_dim;
 
@@ -181,6 +182,18 @@ void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_fil
                             output_spec,
                             open_mode,
                             tensorstore::ReadWriteMode::write).result());
+
+    std::unique_ptr<std::vector<T>> (*downsampling_func_ptr)(std::vector<T>&, std::int64_t, std::int64_t);   
+    if (ds == DSType::Mode_Max){
+      downsampling_func_ptr = &DownsampleModeMax;
+    } else if (ds == DSType::Mode_Min){
+      downsampling_func_ptr = &DownsampleModeMin;
+    } else if (ds == DSType::Mean){
+      downsampling_func_ptr = &DownsampleAverage;
+    } else {
+      downsampling_func_ptr = &DownsampleAverage;
+    }
+
     for(std::int64_t i=0; i<num_rows; ++i){
         auto y_start = i*chunk_shape[y_dim];
         auto y_end = std::min({(i+1)*chunk_shape[y_dim], cur_y_max});
@@ -196,7 +209,7 @@ void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_fil
             th_pool.push_task([ &store1, &store2, 
                                 prev_x_start, prev_x_end, prev_y_start, prev_y_end, 
                                 x_start, x_end, y_start, y_end, 
-                                x_dim, y_dim, v](){  
+                                x_dim, y_dim, v, downsampling_func_ptr](){  
                 std::vector<T> read_buffer((prev_x_end-prev_x_start)*(prev_y_end-prev_y_start));
                 auto array = tensorstore::Array(read_buffer.data(), {prev_y_end-prev_y_start, prev_x_end-prev_x_start}, tensorstore::c_order);
 
@@ -210,7 +223,7 @@ void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_fil
 
                 tensorstore::Read(store1 | input_transform, tensorstore::UnownedToShared(array)).value();
 
-                auto result = DownsampleAverage(read_buffer, (prev_y_end-prev_y_start), (prev_x_end-prev_x_start));
+                auto result = downsampling_func_ptr(read_buffer, (prev_y_end-prev_y_start), (prev_x_end-prev_x_start));
                 auto result_array = tensorstore::Array(result->data(), {y_end-y_start, x_end-x_start}, tensorstore::c_order);
 
                 tensorstore::IndexTransform<> output_transform = tensorstore::IdentityTransform(store2.domain());

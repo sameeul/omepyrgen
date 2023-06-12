@@ -9,7 +9,7 @@ using json = nlohmann::json;
 
 void OmeTiffToChunkedPyramid::GenerateFromSingleFile(  const std::string& input_file,
                                                     const std::string& output_dir, 
-                                                    int min_dim, VisType v){
+                                                    int min_dim, VisType v, DSType ds){
     TIFF *tiff_ = TIFFOpen(input_file.c_str(), "r");
     if (tiff_ != nullptr) {
         uint32_t image_width = 0, image_height = 0;
@@ -31,7 +31,7 @@ void OmeTiffToChunkedPyramid::GenerateFromSingleFile(  const std::string& input_
         _zpw_ptr->Convert(input_file, zarr_file_dir, std::to_string(base_level_key), v, _th_pool);
         std::cout << "Generating image pyramids..."<<std::endl;
         _zpg_ptr = std::make_unique<ChunkedBaseToPyramid>();
-        _zpg_ptr->CreatePyramidImages(zarr_file_dir, zarr_file_dir, 0, min_dim, v, _th_pool);
+        _zpg_ptr->CreatePyramidImages(zarr_file_dir, zarr_file_dir, 0, min_dim, v, ds, _th_pool);
         std::cout << "Writing metadata..." << std::endl;
         WriteMultiscaleMetadataForSingleFile(input_file, output_dir, base_level_key, max_level_key, v);
 
@@ -172,7 +172,8 @@ void OmeTiffToChunkedPyramid::GenerateFromCollection(
                 const std::string& image_name,
                 const std::string& output_dir, 
                 int min_dim, 
-                VisType v){
+                VisType v,
+                DSType ds){
     _tiff_coll_to_zarr_ptr = std::make_unique<OmeTiffCollToChunked>();  
     std::string zarr_file_dir = output_dir + "/" + image_name + ".zarr";
     if (v == VisType::Viv){
@@ -188,7 +189,7 @@ void OmeTiffToChunkedPyramid::GenerateFromCollection(
     auto max_level_key = max_level-min_level+1+base_level_key;
     std::cout << "Generating image pyramids..."<<std::endl;
     _zpg_ptr = std::make_unique<ChunkedBaseToPyramid>();
-    _zpg_ptr->CreatePyramidImages(zarr_file_dir, zarr_file_dir,base_level_key, min_dim, v, _th_pool);
+    _zpg_ptr->CreatePyramidImages(zarr_file_dir, zarr_file_dir,base_level_key, min_dim, v, ds, _th_pool);
     std::cout << "Writing metadata..." << std::endl;
     WriteMultiscaleMetadataForImageCollection(image_name, output_dir, base_level_key, max_level_key, v);
 }
