@@ -57,7 +57,7 @@ void test_zarr_pyramid_gen(){
     auto t1 = std::chrono::high_resolution_clock::now();
     auto zarr_pyr_gen = ChunkedBaseToPyramid();
     BS::thread_pool th_pool;
-    zarr_pyr_gen.CreatePyramidImages(input_zarr_dir, output_root_dir, 17, 1024, VisType::Viv, th_pool);
+    zarr_pyr_gen.CreatePyramidImages(input_zarr_dir, output_root_dir, 17, 1024, VisType::Viv, DSType::Mode_Max, th_pool);
     auto t2 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> et1 = t2-t1;
     std::cout << "time for base image: "<< et1.count() << std::endl;
@@ -65,11 +65,11 @@ void test_zarr_pyramid_gen(){
 
 void test_ome_tiff_to_zarr_pyramid_gen(){
     std::string input_tiff_file = "/home/samee/axle/data/r001_c001_z000.ome.tif";
-    input_tiff_file = "/home/samee/axle/data/test_image.ome.tif";
+    //input_tiff_file = "/home/samee/axle/data/test_image.ome.tif";
     std::string output_dir = "/home/samee/axle/data/test_assembly_out";
     auto t1 = std::chrono::high_resolution_clock::now();
     auto zarr_pyr_gen = OmeTiffToChunkedPyramid();
-    zarr_pyr_gen.GenerateFromSingleFile(input_tiff_file, output_dir, 1024, VisType::TS_NPC);
+    zarr_pyr_gen.GenerateFromSingleFile(input_tiff_file, output_dir, 1024, VisType::Viv, DSType::Mean);
     auto t2 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> et1 = t2-t1;
     std::cout << "time for base image: "<< et1.count() << std::endl;
@@ -82,7 +82,7 @@ void test_ome_tiff_coll_to_zarr_pyramid_gen(){
     std::string output_dir = "/home/samee/axle/data/test_assembly_out";
     auto t1 = std::chrono::high_resolution_clock::now();
     auto zarr_pyr_gen = OmeTiffToChunkedPyramid();
-    zarr_pyr_gen.GenerateFromCollection(input_dir, stitch_vector, image_name, output_dir, 1024, VisType::TS_NPC);
+    zarr_pyr_gen.GenerateFromCollection(input_dir, stitch_vector, image_name, output_dir, 1024, VisType::TS_NPC, DSType::Mode_Max);
     auto t2 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> et1 = t2-t1;
     std::cout << "time for base image: "<< et1.count() << std::endl;
