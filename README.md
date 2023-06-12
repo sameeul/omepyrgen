@@ -32,6 +32,8 @@ OmePyrGen can generate Pyramids from a single image or an image collection with 
 - Neuroglancer Precomputed (TS_NPC)
 - Viv compatible Zarr (Viv)
 
+Currently, three downsampling methods (`mean`, `mode_max` and `mode_mean`) are supported.
+
 Here is an example of generating a pyramid from a single image.
 ```
 from omepyrgen import PyramidGenerartor
@@ -39,7 +41,7 @@ input_file = "/home/samee/axle/data/test_image.ome.tif"
 output_dir = "/home/samee/axle/data/test_image_ome_zarr"
 min_dim = 1024
 pyr_gen = PyramidGenerartor()
-pyr_gen.generate_from_single_image(input_file, output_dir, min_dim, "TS_Zarr")
+pyr_gen.generate_from_single_image(input_file, output_dir, min_dim, "TS_Zarr", "mode_max")
 ```
 
 Here is an example of generating a pyramid from a collection of images and a stitching vector.
@@ -51,5 +53,5 @@ output_dir = "/home/samee/axle/data/test_assembly_out"
 image_name = "test_image"
 min_dim = 1024
 pyr_gen = PyramidGenerartor()
-pyr_gen.generate_from_image_collection(input_dir, stitch_vector_file, image_name, output_dir, min_dim, "Viv")
+pyr_gen.generate_from_image_collection(input_dir, stitch_vector_file, image_name, output_dir, min_dim, "Viv", "mean")
 ```
