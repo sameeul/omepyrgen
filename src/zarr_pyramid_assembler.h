@@ -35,6 +35,5 @@ public:
 
 private:
     std::int64_t _full_image_height, _full_image_width, _chunk_size_x, _chunk_size_y;
-    std::string sample_tiff_file;
 };
 

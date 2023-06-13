@@ -16,60 +16,67 @@ void OmeXml::ParseOmeXml(char* buf){
     pugi::xml_parse_result result = doc.load_string(buf);
     
     if (result){
-        pugi::xml_node pixel = doc.child("OME").child("Image").child("Pixels");
-        for (const pugi::xml_attribute &attr: pixel.attributes()){
-            xml_metadata_map.emplace(attr.name(), attr.value());
+        // check if this is a OME metadta
+        pugi::xml_node ome_node = doc.child("OME");
+        if (ome_node){
+            pugi::xml_node pixel = doc.child("OME").child("Image").child("Pixels");
+            for (const pugi::xml_attribute &attr: pixel.attributes()){
+                xml_metadata_map.emplace(attr.name(), attr.value());
+            }
+
+            // read structured annotation
+            // pugi::xml_node annotation_list = doc.child("OME").child("StructuredAnnotations");
+            // std::string skip_str = "xml version=";
+            // for(const pugi::xml_node &annotation : annotation_list){
+            //     std::string key = annotation.child("Value").child("OriginalMetadata").child("Key").child_value();
+            //     std::string value = annotation.child("Value").child("OriginalMetadata").child("Value").child_value();
+            //     if (value.find(skip_str) != std::string::npos) {continue;} // skip nested xml
+            //     else{
+            //         RemoveControlCharacters(key);
+            //         RemoveControlCharacters(value);
+            //         xml_metadata_map.emplace(key,value);
+            //     }
+
+            // }
+
+            auto it = xml_metadata_map.find("DimensionOrder");
+            if (it != xml_metadata_map.end()){
+                auto dim_order_str = it->second;
+                if (dim_order_str == "XYZTC") { dim_order = 1;}
+                else if (dim_order_str == "XYZCT") { dim_order = 2;}
+                else if (dim_order_str == "XYTCZ") { dim_order = 4;}
+                else if (dim_order_str == "XYTZC") { dim_order = 8;}
+                else if (dim_order_str == "XYCTZ") { dim_order = 16;}
+                else if (dim_order_str == "XYCZT") { dim_order = 32;}
+                else { dim_order = 1;}
+            }
+        
+            it = xml_metadata_map.find("SizeC");
+            if (it != xml_metadata_map.end()) nc = std::stoi(it->second);
+
+            it = xml_metadata_map.find("SizeZ");
+            if (it != xml_metadata_map.end()) nz = std::stoi(it->second);
+
+            it = xml_metadata_map.find("SizeT");
+            if (it != xml_metadata_map.end()) nt = std::stoi(it->second);
+        
+            // get TiffData info
+
+            for (pugi::xml_node tiff_data: pixel.children("TiffData")){
+                size_t c=0, t=0, z=0, ifd=0;
+                for (pugi::xml_attribute attr: tiff_data.attributes()){
+                if (strcmp(attr.name(),"FirstC") == 0) {c = atoi(attr.value());}
+                else if (strcmp(attr.name(),"FirstZ") == 0) {z = atoi(attr.value());}
+                else if (strcmp(attr.name(),"FirstT") == 0) {t = atoi(attr.value());}
+                else if (strcmp(attr.name(),"IFD") == 0) {ifd = atoi(attr.value());}
+                else {continue;}
+                } 
+                tiff_data_list.emplace_back(std::make_tuple(ifd,z,c,t));
+            }
+        } else { // no OME XML metadata
+            tiff_data_list.emplace_back(std::make_tuple(0,0,0,0)); // assume a single IFD
         }
 
-        // read structured annotation
-        // pugi::xml_node annotation_list = doc.child("OME").child("StructuredAnnotations");
-        // std::string skip_str = "xml version=";
-        // for(const pugi::xml_node &annotation : annotation_list){
-        //     std::string key = annotation.child("Value").child("OriginalMetadata").child("Key").child_value();
-        //     std::string value = annotation.child("Value").child("OriginalMetadata").child("Value").child_value();
-        //     if (value.find(skip_str) != std::string::npos) {continue;} // skip nested xml
-        //     else{
-        //         RemoveControlCharacters(key);
-        //         RemoveControlCharacters(value);
-        //         xml_metadata_map.emplace(key,value);
-        //     }
-
-        // }
-
-        auto it = xml_metadata_map.find("DimensionOrder");
-        if (it != xml_metadata_map.end()){
-            auto dim_order_str = it->second;
-            if (dim_order_str == "XYZTC") { dim_order = 1;}
-            else if (dim_order_str == "XYZCT") { dim_order = 2;}
-            else if (dim_order_str == "XYTCZ") { dim_order = 4;}
-            else if (dim_order_str == "XYTZC") { dim_order = 8;}
-            else if (dim_order_str == "XYCTZ") { dim_order = 16;}
-            else if (dim_order_str == "XYCZT") { dim_order = 32;}
-            else { dim_order = 1;}
-        }
-    
-        it = xml_metadata_map.find("SizeC");
-        if (it != xml_metadata_map.end()) nc = std::stoi(it->second);
-
-        it = xml_metadata_map.find("SizeZ");
-        if (it != xml_metadata_map.end()) nz = std::stoi(it->second);
-
-        it = xml_metadata_map.find("SizeT");
-        if (it != xml_metadata_map.end()) nt = std::stoi(it->second);
-    
-        // get TiffData info
-
-        for (pugi::xml_node tiff_data: pixel.children("TiffData")){
-            size_t c=0, t=0, z=0, ifd=0;
-            for (pugi::xml_attribute attr: tiff_data.attributes()){
-            if (strcmp(attr.name(),"FirstC") == 0) {c = atoi(attr.value());}
-            else if (strcmp(attr.name(),"FirstZ") == 0) {z = atoi(attr.value());}
-            else if (strcmp(attr.name(),"FirstT") == 0) {t = atoi(attr.value());}
-            else if (strcmp(attr.name(),"IFD") == 0) {ifd = atoi(attr.value());}
-            else {continue;}
-            } 
-            tiff_data_list.emplace_back(std::make_tuple(ifd,z,c,t));
-        }
     }
 }
 

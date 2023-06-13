@@ -192,7 +192,7 @@ struct ReadTask {
 
   Result<ReadResult> operator()() const {
     ReadResult read_result;
-    auto time1 = std::chrono::steady_clock::now();
+    // auto time1 = std::chrono::steady_clock::now();
     std::string image_metadata;
     std::string tag = "/__TAG__/";
     std::string img_tag = "IMAGE_DESCRIPTION"; 
@@ -232,23 +232,34 @@ struct ReadTask {
           short
             sample_format = 0,          
             bits_per_sample = 0;
-          
-          
-          
+                    
           TIFFGetField(tiff_, TIFFTAG_IMAGEWIDTH, &image_width);
           TIFFGetField(tiff_, TIFFTAG_IMAGELENGTH, &image_height);
-          TIFFGetField(tiff_, TIFFTAG_TILEWIDTH, &tile_width);
-          TIFFGetField(tiff_, TIFFTAG_TILELENGTH, &tile_height);
           TIFFGetField(tiff_, TIFFTAG_BITSPERSAMPLE, &bits_per_sample);
           TIFFGetField(tiff_, TIFFTAG_SAMPLEFORMAT, &sample_format);
           TIFFGetField(tiff_, TIFFTAG_SAMPLESPERPIXEL, &sample_per_pixel);
 
           std::string dtype = GetDataType(sample_format, bits_per_sample);
+          
+          if (TIFFIsTiled(tiff_) == 0) {
+            tile_width = image_width;
+            tile_height = 1024;
+          } else {
+            TIFFGetField(tiff_, TIFFTAG_TILEWIDTH, &tile_width);
+            TIFFGetField(tiff_, TIFFTAG_TILELENGTH, &tile_height);
+          }
 
+          OmeXml ome_data = OmeXml();
+          ome_data.tiff_data_list.emplace_back(std::make_tuple(0,0,0,0));
           char* infobuf;
           TIFFGetField(tiff_, TIFFTAG_IMAGEDESCRIPTION , &infobuf);
-          OmeXml ome_data = OmeXml();
-          ome_data.ParseOmeXml(infobuf);
+          if (strlen(infobuf)>0){
+            ome_data.ParseOmeXml(infobuf);
+          } else {
+          // no metadata, so assuming a single IFD
+          ome_data.tiff_data_list.emplace_back(std::make_tuple(0,0,0,0));
+          }
+
 
           oss << "{"; //start creating JSON string
           oss << "\"dimensions\": [" << ome_data.nt << "," << ome_data.nc << "," << ome_data.nz << ","  << image_height << "," << image_width <<  "],"
@@ -277,27 +288,54 @@ struct ReadTask {
           TIFF *tiff_ = TIFFOpen(actual_full_path.c_str(), "r");
           if (tiff_ != nullptr) 
           {
-            
-            auto t_szb = TIFFTileSize(tiff_);
-            TIFFSetDirectory(tiff_, ifd_dir);
-            internal::FlatCordBuilder buffer(t_szb);
-            auto errcode = TIFFReadTile(tiff_, buffer.data(), x_pos, y_pos, 0, 0);
-            TIFFClose(tiff_);      
-            if (errcode != -1){
+            if (TIFFIsTiled(tiff_) != 0){ // tiled tiff image
+              auto t_szb = TIFFTileSize(tiff_);
+              TIFFSetDirectory(tiff_, ifd_dir);
+              internal::FlatCordBuilder buffer(t_szb);
+              auto errcode = TIFFReadTile(tiff_, buffer.data(), x_pos, y_pos, 0, 0);
+              TIFFClose(tiff_);      
+              if (errcode != -1){
+                read_result.state = ReadResult::kValue;
+                //tiled_tiff_bytes_read.IncrementBy(errcode);
+                read_result.value = std::move(buffer).Build();
+              } 
+              else {
+                read_result.state = ReadResult::kMissing;
+                return StatusFromErrno("Error reading file: ", actual_full_path);
+              }
+            } else { // raster image
+              uint32_t tile_height = 1024, image_height = 0, image_width = 0; // hardcoded tile height
+              TIFFGetField(tiff_, TIFFTAG_IMAGELENGTH, &image_height);
+              TIFFGetField(tiff_, TIFFTAG_IMAGEWIDTH, &image_width);
+              uint32_t tile_width = image_width;
+              uint32_t start_row = y_pos; 
+              uint32_t end_row = std::min(y_pos+tile_height, image_height); 
+              auto line_size = TIFFScanlineSize(tiff_);
+              TIFFSetDirectory(tiff_, ifd_dir);
+              internal::FlatCordBuilder buffer(line_size*tile_height);
+              auto buf_ptr = buffer.data();
+
+              for(auto row=start_row; row<end_row; ++row){
+                auto errcode = TIFFReadScanline(tiff_, buf_ptr, row);
+                if (errcode == -1){
+                  TIFFClose(tiff_);   
+                  read_result.state = ReadResult::kMissing;
+                  return StatusFromErrno("Error reading file: ", actual_full_path);
+                }           
+                buf_ptr += line_size;
+              }
+
+              TIFFClose(tiff_); 
               read_result.state = ReadResult::kValue;
               //tiled_tiff_bytes_read.IncrementBy(errcode);
               read_result.value = std::move(buffer).Build();
             } 
-            else {
-              read_result.state = ReadResult::kMissing;
-              return StatusFromErrno("Error reading file: ", actual_full_path);
-            }
           }
         }
       }
     }
-    auto time2 = std::chrono::steady_clock::now();
-    std::chrono::duration<double> elapsed_time = time2 - time1;
+    // auto time2 = std::chrono::steady_clock::now();
+    // std::chrono::duration<double> elapsed_time = time2 - time1;
     //std::cout<<"Time Reading Tiff=" << elapsed_time.count()<< std::endl;
     return read_result;
   }
