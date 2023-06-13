@@ -32,7 +32,7 @@ OmePyrGen can generate Pyramids from a single image or an image collection with 
 - Neuroglancer Precomputed (TS_NPC)
 - Viv compatible Zarr (Viv)
 
-Currently, three downsampling methods (`mean`, `mode_max` and `mode_mean`) are supported.
+Currently, three downsampling methods (`mean`, `mode_max` and `mode_min`) are supported.
 
 Here is an example of generating a pyramid from a single image.
 ```
