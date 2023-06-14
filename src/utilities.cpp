@@ -62,6 +62,7 @@ tensorstore::Spec GetNPCSpecToWrite(const std::string& filename,
                                     const std::vector<std::int64_t>& image_shape, 
                                     const std::vector<std::int64_t>& chunk_shape,
                                     int resolution,
+                                    int num_channels,
                                     std::string_view dtype, bool base_level){
     if (base_level){
       return tensorstore::Spec::FromJson({{"driver", "neuroglancer_precomputed"},
@@ -75,7 +76,7 @@ tensorstore::Spec GetNPCSpecToWrite(const std::string& filename,
                               }},
                               {"multiscale_metadata", {
                                             {"data_type", dtype},
-                                            {"num_channels", 1},
+                                            {"num_channels", num_channels},
                                             {"type", "image"},
                               }},
                               {"scale_metadata", {

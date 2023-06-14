@@ -126,7 +126,7 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
     if (v == VisType::TS_Zarr | v == VisType::Viv){
       output_spec = GetZarrSpecToWrite(output_file + "/" + scale_key, new_image_shape, chunk_shape, base_zarr_dtype.encoded_dtype);
     } else if (v == VisType::TS_NPC){
-      output_spec = GetNPCSpecToWrite(output_file, scale_key, new_image_shape, chunk_shape, 1, test_source.dtype().name(), true);
+      output_spec = GetNPCSpecToWrite(output_file, scale_key, new_image_shape, chunk_shape, 1, 2, test_source.dtype().name(), true);
     }
 
     TENSORSTORE_CHECK_OK_AND_ASSIGN(auto dest, tensorstore::Open(
@@ -135,70 +135,78 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
                                 tensorstore::OpenMode::delete_existing,
                                 tensorstore::ReadWriteMode::write).result());
     
-    for(const auto& i: image_vec){        
-      th_pool.push_task([&dest, &input_dir, i, x_dim, y_dim, this, &pending_writes, v](){
+    for(std::int64_t c=0; c<2; ++c){
+      for(const auto& i: image_vec){        
+        th_pool.push_task([&dest, &input_dir, i, x_dim, y_dim, this, &pending_writes, v, c](){
 
-        TENSORSTORE_CHECK_OK_AND_ASSIGN(auto source, tensorstore::Open(
-                                    GetOmeTiffSpecToRead(input_dir + "/" + i.file_name),
-                                    tensorstore::OpenMode::open,
-                                    tensorstore::ReadWriteMode::read).result());
+          TENSORSTORE_CHECK_OK_AND_ASSIGN(auto source, tensorstore::Open(
+                                      GetOmeTiffSpecToRead(input_dir + "/" + i.file_name),
+                                      tensorstore::OpenMode::open,
+                                      tensorstore::ReadWriteMode::read).result());
 
-        auto image_shape = source.domain().shape();
-        auto image_width = image_shape[4];
-        auto image_height = image_shape[3];
-        auto array = tensorstore::AllocateArray({image_height, image_width},tensorstore::c_order,
-                                                          tensorstore::value_init, source.dtype());
+          auto image_shape = source.domain().shape();
+          auto image_width = image_shape[4];
+          auto image_height = image_shape[3];
+          auto array = tensorstore::AllocateArray({image_height, image_width},tensorstore::c_order,
+                                                            tensorstore::value_init, source.dtype());
 
-        // initiate a read
-        tensorstore::Read(source | 
-                tensorstore::Dims(3).ClosedInterval(0, image_height-1) |
-                tensorstore::Dims(4).ClosedInterval(0, image_width-1) ,
-                array).value();
+          // initiate a read
+          tensorstore::Read(source | 
+                  tensorstore::Dims(3).ClosedInterval(0, image_height-1) |
+                  tensorstore::Dims(4).ClosedInterval(0, image_width-1) ,
+                  array).value();
 
-        tensorstore::IndexTransform<> transform = tensorstore::IdentityTransform(dest.domain());
-        if(v == VisType::TS_NPC){
-          transform = (std::move(transform) | tensorstore::Dims(2, 3).IndexSlice({0,0}) 
-                                            | tensorstore::Dims(y_dim).SizedInterval(i._y_grid*this->_chunk_size_y, image_height) 
-                                            | tensorstore::Dims(x_dim).SizedInterval(i._x_grid*this->_chunk_size_x, image_width)
-                                            | tensorstore::Dims(x_dim, y_dim).Transpose({y_dim, x_dim})).value();
+          tensorstore::IndexTransform<> transform = tensorstore::IdentityTransform(dest.domain());
+          if(v == VisType::TS_NPC){
+            transform = (std::move(transform) | tensorstore::Dims(2, 3).IndexSlice({0,c}) 
+                                              | tensorstore::Dims(y_dim).SizedInterval(i._y_grid*this->_chunk_size_y, image_height) 
+                                              | tensorstore::Dims(x_dim).SizedInterval(i._x_grid*this->_chunk_size_x, image_width)
+                                              | tensorstore::Dims(x_dim, y_dim).Transpose({y_dim, x_dim})).value();
 
-        } else if (v == VisType::TS_Zarr | v == VisType::Viv){
-          transform = (std::move(transform) | tensorstore::Dims(y_dim).SizedInterval(i._y_grid*this->_chunk_size_y, image_height) 
-                                            | tensorstore::Dims(x_dim).SizedInterval(i._x_grid*this->_chunk_size_x, image_width)).value();
-        }
-      pending_writes.emplace_back(tensorstore::Write(array, dest | transform));
-
-      });
-    }
-
-    th_pool.wait_for_tasks();
-
-    size_t total_writes = pending_writes.size(); 
-
-    size_t count = 0, num_pass = 10;
-    while( num_pass > 0){
-      for (auto it = pending_writes.begin(); it != pending_writes.end();) {
-        if (it->commit_future.ready()) {
-          if (!tensorstore::GetStatus(it->commit_future).ok()) {
-            write_failed_count++;
-            std::cout << tensorstore::GetStatus(it->commit_future);
+          } else if (v == VisType::TS_Zarr){
+            transform = (std::move(transform) | tensorstore::Dims(y_dim).SizedInterval(i._y_grid*this->_chunk_size_y, image_height) 
+                                              | tensorstore::Dims(x_dim).SizedInterval(i._x_grid*this->_chunk_size_x, image_width)).value();
+          } else if (v == VisType::Viv){
+            transform = (std::move(transform) | tensorstore::Dims(0, 1, 2).IndexSlice({0,c,0})
+                                              | tensorstore::Dims(y_dim).SizedInterval(i._y_grid*this->_chunk_size_y, image_height) 
+                                              | tensorstore::Dims(x_dim).SizedInterval(i._x_grid*this->_chunk_size_x, image_width)).value();
           }
-          count++;
-          it = pending_writes.erase(it);
-        } else {
-          ++it;
+
+        pending_writes.emplace_back(tensorstore::Write(array, dest | transform));
+
+        });
+      }
+
+      th_pool.wait_for_tasks();
+
+      size_t total_writes = pending_writes.size(); 
+
+      size_t count = 0, num_pass = 10;
+      while( num_pass > 0){
+        for (auto it = pending_writes.begin(); it != pending_writes.end();) {
+          if (it->commit_future.ready()) {
+            if (!tensorstore::GetStatus(it->commit_future).ok()) {
+              write_failed_count++;
+              std::cout << tensorstore::GetStatus(it->commit_future);
+            }
+            count++;
+            it = pending_writes.erase(it);
+          } else {
+            ++it;
+          }
+        }
+        --num_pass;
+      }
+
+      std::cout << "remaining stuff "<< pending_writes.size() << std::endl; 
+      // force the rest of it to finish
+      for (auto& front : pending_writes) {
+        if (!tensorstore::GetStatus(front.commit_future).ok()) {
+          write_failed_count++;
         }
       }
-      --num_pass;
     }
 
-    std::cout << "remaining stuff "<< pending_writes.size() << std::endl; 
-    // force the rest of it to finish
-    for (auto& front : pending_writes) {
-      if (!tensorstore::GetStatus(front.commit_future).ok()) {
-        write_failed_count++;
-      }
-    }
   }
 
   auto t2 = std::chrono::high_resolution_clock::now();

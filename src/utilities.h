@@ -29,6 +29,7 @@ tensorstore::Spec GetNPCSpecToWrite(const std::string& filename,
                                     const std::vector<std::int64_t>& image_shape, 
                                     const std::vector<std::int64_t>& chunk_shape,
                                     int resolution,
+                                    int num_channels,
                                     std::string_view dtype,
                                     bool base_level);
 
