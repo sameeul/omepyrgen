@@ -61,8 +61,8 @@ tensorstore::Spec GetNPCSpecToWrite(const std::string& filename,
                                     const std::string& scale_key,
                                     const std::vector<std::int64_t>& image_shape, 
                                     const std::vector<std::int64_t>& chunk_shape,
-                                    int resolution,
-                                    int num_channels,
+                                    std::int64_t resolution,
+                                    std::int64_t num_channels,
                                     std::string_view dtype, bool base_level){
     if (base_level){
       return tensorstore::Spec::FromJson({{"driver", "neuroglancer_precomputed"},
