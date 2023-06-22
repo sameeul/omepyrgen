@@ -40,7 +40,6 @@ void ChunkedBaseToPyramid::CreatePyramidImages( const std::string& input_zarr_di
                                                 DSType ds,
                                                 BS::thread_pool& th_pool)
 {
-
     int resolution = 1; // this gets doubled in each level up
     tensorstore::Spec input_spec{};
     if (v == VisType::TS_Zarr | v == VisType::Viv){
@@ -62,8 +61,8 @@ void ChunkedBaseToPyramid::CreatePyramidImages( const std::string& input_zarr_di
         y_ind = 3;
     
     } else if (v == VisType::TS_Zarr){ // 3D file
-        x_ind = 2;
-        y_ind = 1;
+        x_ind = 3;
+        y_ind = 2;
     
     } else if (v == VisType::TS_NPC ){ // 3D file
         x_ind = 1;
@@ -126,10 +125,10 @@ void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_fil
         num_dims = 5;
     
     } else if (v == VisType::TS_Zarr){ // 3D file
-        x_dim = 2;
-        y_dim = 1;
-        c_dim = 3;
-        num_dims = 3;
+        x_dim = 3;
+        y_dim = 2;
+        c_dim = 0;
+        num_dims = 4;
     
     } else if (v == VisType::TS_NPC ){ // 3D file
         x_dim = 1;
@@ -151,7 +150,6 @@ void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_fil
     auto prev_image_shape = store1.domain().shape();
     auto read_chunk_shape = store1.chunk_layout().value().read_chunk_shape();
 
-    std::cout << "prev image shape " << prev_image_shape << std::endl;
     TENSORSTORE_CHECK_OK_AND_ASSIGN(auto base_zarr_dtype,
                                         ChooseBaseDType(store1.dtype()));
     auto prev_x_max = static_cast<std::int64_t>(prev_image_shape[x_dim]);
@@ -159,7 +157,6 @@ void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_fil
 
     auto cur_x_max = static_cast<std::int64_t>(ceil(prev_x_max/2.0));
     auto cur_y_max = static_cast<std::int64_t>(ceil(prev_y_max/2.0));
-
     auto num_channels = static_cast<std::int64_t>(prev_image_shape[c_dim]);
     //std::int64_t num_channels = 1;
     std::vector<std::int64_t> new_image_shape(num_dims,1);
@@ -167,9 +164,7 @@ void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_fil
 
     new_image_shape[y_dim] = cur_y_max;
     new_image_shape[x_dim] = cur_x_max;
-    if (v == VisType::Viv){
-      new_image_shape[c_dim] = prev_image_shape[c_dim];
-    }
+
     chunk_shape[y_dim] = static_cast<std::int64_t>(read_chunk_shape[y_dim]);
     chunk_shape[x_dim] = static_cast<std::int64_t>(read_chunk_shape[x_dim]);
 
@@ -180,6 +175,7 @@ void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_fil
     auto open_mode = tensorstore::OpenMode::create;
 
     if (v == VisType::TS_Zarr | v == VisType::Viv){
+      new_image_shape[c_dim] = prev_image_shape[c_dim];
       output_spec = GetZarrSpecToWrite(output_file + "/" + output_scale_key, new_image_shape, chunk_shape, base_zarr_dtype.encoded_dtype);
       open_mode = open_mode | tensorstore::OpenMode::delete_existing;
     } else if (v == VisType::TS_NPC){
@@ -190,7 +186,7 @@ void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_fil
                             output_spec,
                             open_mode,
                             tensorstore::ReadWriteMode::write).result());
-    std::cout << "new image shape " << store2.domain().shape() << std::endl;
+
     std::unique_ptr<std::vector<T>> (*downsampling_func_ptr)(std::vector<T>&, std::int64_t, std::int64_t);   
     if (ds == DSType::Mode_Max){
       downsampling_func_ptr = &DownsampleModeMax;
@@ -217,7 +213,7 @@ void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_fil
                 th_pool.push_task([ &store1, &store2, 
                                     prev_x_start, prev_x_end, prev_y_start, prev_y_end, 
                                     x_start, x_end, y_start, y_end, 
-                                    x_dim, y_dim, c, v, downsampling_func_ptr](){  
+                                    x_dim, y_dim, c_dim, c, v, downsampling_func_ptr](){  
                     std::vector<T> read_buffer((prev_x_end-prev_x_start)*(prev_y_end-prev_y_start));
                     auto array = tensorstore::Array(read_buffer.data(), {prev_y_end-prev_y_start, prev_x_end-prev_x_start}, tensorstore::c_order);
 
@@ -226,8 +222,8 @@ void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_fil
                     if(v == VisType::TS_NPC){
                       input_transform = (std::move(input_transform) | tensorstore::Dims(2, 3).IndexSlice({0,c})).value();
                     } else 
-                    if (v == VisType::Viv){
-                      input_transform = (std::move(input_transform) | tensorstore::Dims(1).SizedInterval(c,1)).value();
+                    if (v == VisType::Viv || v == VisType::TS_Zarr){
+                      input_transform = (std::move(input_transform) | tensorstore::Dims(c_dim).SizedInterval(c,1)).value();
                     } 
 
                     input_transform = (std::move(input_transform) | tensorstore::Dims(y_dim).ClosedInterval(prev_y_start, prev_y_end-1) 
@@ -243,10 +239,9 @@ void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_fil
                     if(v == VisType::TS_NPC){
                       output_transform = (std::move(output_transform) | tensorstore::Dims(2, 3).IndexSlice({0,c})).value();
                     } else
-                    if (v == VisType::Viv){
-                      output_transform = (std::move(output_transform) | tensorstore::Dims(1).SizedInterval(c,1)).value();
+                    if (v == VisType::Viv || v == VisType::TS_Zarr){
+                      output_transform = (std::move(output_transform) | tensorstore::Dims(c_dim).SizedInterval(c,1)).value();
                     } 
-
                     output_transform = (std::move(output_transform) | tensorstore::Dims(y_dim).ClosedInterval(y_start, y_end-1) 
                                                                     | tensorstore::Dims(x_dim).ClosedInterval(x_start, x_end-1)).value(); 
 

@@ -32,9 +32,9 @@ void OmeTiffToZarrConverter::Convert( const std::string& input_file, const std::
     y_dim = 3;
     num_dims = 5;
   } else if (v == VisType::TS_Zarr ){ // 3D file
-    x_dim = 2;
-    y_dim = 1;
-    num_dims = 3;
+    x_dim = 3;
+    y_dim = 2;
+    num_dims = 4;
   } else if (v == VisType::TS_NPC ){ // 3D file
     x_dim = 0;
     y_dim = 1;
