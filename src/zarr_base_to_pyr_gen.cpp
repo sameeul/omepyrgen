@@ -40,7 +40,6 @@ void ChunkedBaseToPyramid::CreatePyramidImages( const std::string& input_zarr_di
                                                 DSType ds,
                                                 BS::thread_pool& th_pool)
 {
-
     int resolution = 1; // this gets doubled in each level up
     tensorstore::Spec input_spec{};
     if (v == VisType::TS_Zarr | v == VisType::Viv){
@@ -62,8 +61,8 @@ void ChunkedBaseToPyramid::CreatePyramidImages( const std::string& input_zarr_di
         y_ind = 3;
     
     } else if (v == VisType::TS_Zarr){ // 3D file
-        x_ind = 2;
-        y_ind = 1;
+        x_ind = 3;
+        y_ind = 2;
     
     } else if (v == VisType::TS_NPC ){ // 3D file
         x_ind = 1;
@@ -117,21 +116,24 @@ void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_fil
                                                     const std::string& output_file, const std::string& output_scale_key,
                                                     int resolution, VisType v, DSType ds, BS::thread_pool& th_pool)
 {
-    int num_dims, x_dim, y_dim;
+    int num_dims, x_dim, y_dim, c_dim;
 
     if (v == VisType::Viv){ //5D file
         x_dim = 4;
         y_dim = 3;
+        c_dim = 1;
         num_dims = 5;
     
     } else if (v == VisType::TS_Zarr){ // 3D file
-        x_dim = 2;
-        y_dim = 1;
-        num_dims = 3;
+        x_dim = 3;
+        y_dim = 2;
+        c_dim = 0;
+        num_dims = 4;
     
     } else if (v == VisType::TS_NPC ){ // 3D file
         x_dim = 1;
         y_dim = 0;
+        c_dim = 3;
         num_dims = 3;
     }
     tensorstore::Spec input_spec{};
@@ -155,7 +157,8 @@ void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_fil
 
     auto cur_x_max = static_cast<std::int64_t>(ceil(prev_x_max/2.0));
     auto cur_y_max = static_cast<std::int64_t>(ceil(prev_y_max/2.0));
-
+    auto num_channels = static_cast<std::int64_t>(prev_image_shape[c_dim]);
+    //std::int64_t num_channels = 1;
     std::vector<std::int64_t> new_image_shape(num_dims,1);
     std::vector<std::int64_t> chunk_shape(num_dims,1);
 
@@ -172,10 +175,11 @@ void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_fil
     auto open_mode = tensorstore::OpenMode::create;
 
     if (v == VisType::TS_Zarr | v == VisType::Viv){
+      new_image_shape[c_dim] = prev_image_shape[c_dim];
       output_spec = GetZarrSpecToWrite(output_file + "/" + output_scale_key, new_image_shape, chunk_shape, base_zarr_dtype.encoded_dtype);
       open_mode = open_mode | tensorstore::OpenMode::delete_existing;
     } else if (v == VisType::TS_NPC){
-      output_spec = GetNPCSpecToWrite(output_file, output_scale_key, new_image_shape, chunk_shape, resolution, store1.dtype().name(), false);
+      output_spec = GetNPCSpecToWrite(output_file, output_scale_key, new_image_shape, chunk_shape, resolution, num_channels, store1.dtype().name(), false);
     }
     
     TENSORSTORE_CHECK_OK_AND_ASSIGN(auto store2, tensorstore::Open(
@@ -194,49 +198,58 @@ void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_fil
       downsampling_func_ptr = &DownsampleAverage;
     }
 
-    for(std::int64_t i=0; i<num_rows; ++i){
-        auto y_start = i*chunk_shape[y_dim];
-        auto y_end = std::min({(i+1)*chunk_shape[y_dim], cur_y_max});
+    for(std::int64_t c=0; c<num_channels; ++c){
+        for(std::int64_t i=0; i<num_rows; ++i){
+            auto y_start = i*chunk_shape[y_dim];
+            auto y_end = std::min({(i+1)*chunk_shape[y_dim], cur_y_max});
 
-        auto prev_y_start = 2*y_start;
-        auto prev_y_end = std::min({2*y_end, prev_y_max});
-        for(std::int64_t j=0; j<num_cols; ++j){
-            auto x_start = j*chunk_shape[x_dim];
-            auto x_end = std::min({(j+1)*chunk_shape[x_dim], cur_x_max});
-            auto prev_x_start = 2*x_start;
-            auto prev_x_end = std::min({2*x_end, prev_x_max});
-            
-            th_pool.push_task([ &store1, &store2, 
-                                prev_x_start, prev_x_end, prev_y_start, prev_y_end, 
-                                x_start, x_end, y_start, y_end, 
-                                x_dim, y_dim, v, downsampling_func_ptr](){  
-                std::vector<T> read_buffer((prev_x_end-prev_x_start)*(prev_y_end-prev_y_start));
-                auto array = tensorstore::Array(read_buffer.data(), {prev_y_end-prev_y_start, prev_x_end-prev_x_start}, tensorstore::c_order);
+            auto prev_y_start = 2*y_start;
+            auto prev_y_end = std::min({2*y_end, prev_y_max});
+            for(std::int64_t j=0; j<num_cols; ++j){
+                auto x_start = j*chunk_shape[x_dim];
+                auto x_end = std::min({(j+1)*chunk_shape[x_dim], cur_x_max});
+                auto prev_x_start = 2*x_start;
+                auto prev_x_end = std::min({2*x_end, prev_x_max});
+                th_pool.push_task([ &store1, &store2, 
+                                    prev_x_start, prev_x_end, prev_y_start, prev_y_end, 
+                                    x_start, x_end, y_start, y_end, 
+                                    x_dim, y_dim, c_dim, c, v, downsampling_func_ptr](){  
+                    std::vector<T> read_buffer((prev_x_end-prev_x_start)*(prev_y_end-prev_y_start));
+                    auto array = tensorstore::Array(read_buffer.data(), {prev_y_end-prev_y_start, prev_x_end-prev_x_start}, tensorstore::c_order);
 
-                tensorstore::IndexTransform<> input_transform = tensorstore::IdentityTransform(store1.domain());
-                if(v == VisType::TS_NPC){
-                input_transform = (std::move(input_transform) | tensorstore::Dims(2, 3).IndexSlice({0,0})).value();
+                    tensorstore::IndexTransform<> input_transform = tensorstore::IdentityTransform(store1.domain());
+                    
+                    if(v == VisType::TS_NPC){
+                      input_transform = (std::move(input_transform) | tensorstore::Dims(2, 3).IndexSlice({0,c})).value();
+                    } else 
+                    if (v == VisType::Viv || v == VisType::TS_Zarr){
+                      input_transform = (std::move(input_transform) | tensorstore::Dims(c_dim).SizedInterval(c,1)).value();
+                    } 
 
-                } 
-                input_transform = (std::move(input_transform) | tensorstore::Dims(y_dim).ClosedInterval(prev_y_start, prev_y_end-1) 
-                                                    | tensorstore::Dims(x_dim).ClosedInterval(prev_x_start, prev_x_end-1)).value(); 
+                    input_transform = (std::move(input_transform) | tensorstore::Dims(y_dim).ClosedInterval(prev_y_start, prev_y_end-1) 
+                                                        | tensorstore::Dims(x_dim).ClosedInterval(prev_x_start, prev_x_end-1)).value(); 
 
-                tensorstore::Read(store1 | input_transform, tensorstore::UnownedToShared(array)).value();
+                    tensorstore::Read(store1 | input_transform, tensorstore::UnownedToShared(array)).value();
 
-                auto result = downsampling_func_ptr(read_buffer, (prev_y_end-prev_y_start), (prev_x_end-prev_x_start));
-                auto result_array = tensorstore::Array(result->data(), {y_end-y_start, x_end-x_start}, tensorstore::c_order);
+                    auto result = downsampling_func_ptr(read_buffer, (prev_y_end-prev_y_start), (prev_x_end-prev_x_start));
+                    auto result_array = tensorstore::Array(result->data(), {y_end-y_start, x_end-x_start}, tensorstore::c_order);
 
-                tensorstore::IndexTransform<> output_transform = tensorstore::IdentityTransform(store2.domain());
-                if(v == VisType::TS_NPC){
-                output_transform = (std::move(output_transform) | tensorstore::Dims(2, 3).IndexSlice({0,0})).value();
 
-                } 
-                output_transform = (std::move(output_transform) | tensorstore::Dims(y_dim).ClosedInterval(y_start, y_end-1) 
-                                                                | tensorstore::Dims(x_dim).ClosedInterval(x_start, x_end-1)).value(); 
+                    tensorstore::IndexTransform<> output_transform = tensorstore::IdentityTransform(store2.domain());
+                    if(v == VisType::TS_NPC){
+                      output_transform = (std::move(output_transform) | tensorstore::Dims(2, 3).IndexSlice({0,c})).value();
+                    } else
+                    if (v == VisType::Viv || v == VisType::TS_Zarr){
+                      output_transform = (std::move(output_transform) | tensorstore::Dims(c_dim).SizedInterval(c,1)).value();
+                    } 
+                    output_transform = (std::move(output_transform) | tensorstore::Dims(y_dim).ClosedInterval(y_start, y_end-1) 
+                                                                    | tensorstore::Dims(x_dim).ClosedInterval(x_start, x_end-1)).value(); 
 
-                tensorstore::Write(tensorstore::UnownedToShared(result_array), store2 | output_transform).value();  
-            }); 
+                    tensorstore::Write(tensorstore::UnownedToShared(result_array), store2 | output_transform).value();  
+                }); 
+            }
         }
+       
     }
     th_pool.wait_for_tasks();
 }

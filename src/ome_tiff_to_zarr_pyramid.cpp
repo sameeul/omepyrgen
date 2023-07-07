@@ -101,6 +101,7 @@ void OmeTiffToChunkedPyramid::WriteTSZattrFile(const std::string& tiff_file_name
 
     json zarr_multiscale_axes;
     zarr_multiscale_axes = json::parse(R"([
+                    {"name": "c", "type": "channel"},
                     {"name": "z", "type": "space", "unit": "micrometer"},
                     {"name": "y", "type": "space", "unit": "micrometer"},
                     {"name": "x", "type": "space", "unit": "micrometer"}
@@ -112,7 +113,7 @@ void OmeTiffToChunkedPyramid::WriteTSZattrFile(const std::string& tiff_file_name
     for(int i=min_level; i<=max_level; ++i){
         json scale_metadata;
         scale_metadata["path"] = std::to_string(i);
-        scale_metadata["coordinateTransformations"] = {{{"type", "scale"}, {"scale", {1.0, level, level}}}};
+        scale_metadata["coordinateTransformations"] = {{{"type", "scale"}, {"scale", {1.0, 1.0, level, level}}}};
         scale_metadata_list.push_back(scale_metadata);
         level = level*2;
     }
