@@ -38,10 +38,10 @@ namespace fs = std::filesystem;
 using ::tensorstore::Context;
 using ::tensorstore::internal_zarr::ChooseBaseDType;
 
-int retrieve_val(const std::string& var, const Map& m){
+std::int64_t retrieve_val(const std::string& var, const Map& m){
     auto it = m.find(var);
     if(it != m.end()){
-        return  std::get<int>(it->second);
+        return static_cast<std::int64_t>(std::get<int>(it->second));
     } else {
         return 0;
     }
