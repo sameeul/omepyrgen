@@ -4,6 +4,12 @@ project(OmePyrGen)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# this is a workaround for GitHub Action for wheelbuiling
+if(DEFINED ENV{OMEPYRGEN_DEP_DIR})
+	set(CMAKE_PREFIX_PATH $ENV{OMEPYRGEN_DEP_DIR})
+	link_directories($ENV{OMEPYRGEN_DEP_DIR}/lib)
+endif()
+
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
   endif()
@@ -44,6 +50,10 @@ target_link_libraries(
     tensorstore::tensorstore tensorstore::all_drivers
 )
 
+
+find_package(filepattern REQUIRED)
+target_link_libraries(test_pyrgen PRIVATE filepattern::filepattern)
+
 find_package(Threads QUIET)
 if (Threads_FOUND)
     if (CMAKE_USE_PTHREADS_INIT)
@@ -51,7 +61,7 @@ if (Threads_FOUND)
     endif (CMAKE_USE_PTHREADS_INIT)
     list(APPEND Build_LIBRARIES ${CMAKE_THREAD_LIBS_INIT})
 else ()
-	message(STATUS "Unable to find threads. Nyxus must have a threading library i.e. pthreads.")
+	message(STATUS "Unable to find threads. OmePyrGen must have a threading library i.e. pthreads.")
 endif ()
 
 # Python bindings.
@@ -69,7 +79,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_link_libraries(libomepyrgen PRIVATE stdc++fs)
 endif()
 
-target_link_libraries(libomepyrgen PRIVATE tensorstore::tensorstore tensorstore::all_drivers)
+target_link_libraries(libomepyrgen PRIVATE tensorstore::tensorstore tensorstore::all_drivers filepattern::filepattern)
 target_link_libraries(libomepyrgen PRIVATE ${Build_LIBRARIES})  
 
 target_link_libraries(

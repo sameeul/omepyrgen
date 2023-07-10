@@ -9,5 +9,5 @@ class PyramidGenerartor:
     def generate_from_single_image(self, input_file, output_dir, min_dim, vis_type, ds_type):
         self._pyr_generator.GenerateFromSingleFile(input_file, output_dir, min_dim, self.vis_types_dict[vis_type], self.ds_types_dict[ds_type])
 
-    def generate_from_image_collection(self, collection_path, stitch_vector_file, image_name, output_dir, min_dim, vis_type, ds_type):   
-        self._pyr_generator.GenerateFromCollection(collection_path, stitch_vector_file, image_name, output_dir, min_dim, self.vis_types_dict[vis_type], self.ds_types_dict[ds_type])
+    def generate_from_image_collection(self, collection_path, pattern , image_name, output_dir, min_dim, vis_type, ds_type):   
+        self._pyr_generator.GenerateFromCollection(collection_path, pattern , image_name, output_dir, min_dim, self.vis_types_dict[vis_type], self.ds_types_dict[ds_type])
