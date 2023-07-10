@@ -73,7 +73,7 @@ pybind11_add_module(libomepyrgen
   src/python/pyramid_python_interface.cpp
 )
 
-target_compile_definitions(libomepyrgen PRIVATE WITH_PYTHON_H)
+#target_compile_definitions(libomepyrgen PRIVATE WITH_PYTHON_H)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 	SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -fPIC")
   target_link_libraries(libomepyrgen PRIVATE stdc++fs)
