@@ -48,10 +48,11 @@ Here is an example of generating a pyramid from a collection of images and a sti
 ```
 from omepyrgen import PyramidGenerartor
 input_dir = "/home/samee/axle/data/intensity1"
-stitch_vector_file = "/home/samee/axle/data/tmp_dir/img-global-positions-1.txt";
+file_pattern = "x{x:d}_y{y:d}_c{c:d}.ome.tiff"
 output_dir = "/home/samee/axle/data/test_assembly_out"
 image_name = "test_image"
 min_dim = 1024
 pyr_gen = PyramidGenerartor()
-pyr_gen.generate_from_image_collection(input_dir, stitch_vector_file, image_name, output_dir, min_dim, "Viv", "mean")
+pyr_gen.generate_from_image_collection(input_dir, file_pattern, image_name, 
+                                        output_dir, min_dim, "Viv", "mean")
 ```
