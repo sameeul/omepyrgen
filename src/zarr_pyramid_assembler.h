@@ -23,7 +23,7 @@ public:
     OmeTiffCollToChunked(){};
 
     void Assemble(const std::string& input_dir,
-                  const std::string& stitching_file,
+                  const std::string& pattern,
                   const std::string& output_file, 
                   const std::string& scale_key, 
                   VisType v, 

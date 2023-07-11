@@ -27,6 +27,8 @@
 #include "tensorstore/kvstore/kvstore.h"
 #include "tensorstore/open.h"
 
+#include "filepattern.h"
+
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
 
@@ -36,10 +38,19 @@ namespace fs = std::filesystem;
 using ::tensorstore::Context;
 using ::tensorstore::internal_zarr::ChooseBaseDType;
 
+std::int64_t retrieve_val(const std::string& var, const Map& m){
+    auto it = m.find(var);
+    if(it != m.end()){
+        return static_cast<std::int64_t>(std::get<int>(it->second));
+    } else {
+        return 0;
+    }
+}
+
 
 
 void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
-                                    const std::string& stitching_file,
+                                    const std::string& pattern ,
                                     const std::string& output_file, 
                                     const std::string& scale_key, 
                                     VisType v, 
@@ -47,6 +58,7 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
 {
   std::regex match_str(
       "file:\\s(\\S+);[\\s|\\S]+position:\\s\\((\\d+),\\s(\\d+)\\,\\s(\\d+)\\);[\\s|\\S]+grid:\\s\\((\\d+),\\s(\\d+)\\);");
+  
   
 
   std::string line;
@@ -58,30 +70,20 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
   _full_image_width = 0;
   _full_image_height = 0;
 
-  std::fstream stitch_vec;
-  stitch_vec.open(stitching_file, std::ios::in);
-  if(!stitch_vec.is_open()){
-    std::cout<<"Stitching vector not found!"<<std::endl;
-    
-  } else {
-    // parse sticthing vector file
-    while (getline(stitch_vec, line)) {
-      if (std::regex_match(line, pieces_match, match_str)) {
-        if(pieces_match.size() == 7){
-          auto fname = pieces_match[1].str();
-          auto gc = std::stoi(pieces_match[4].str());
-          auto gx = std::stoi(pieces_match[5].str());
-          auto gy = std::stoi(pieces_match[6].str());
-          if (gx < 10 && gy < 10){
-            gc > grid_c_max ? grid_c_max = gc : grid_c_max = grid_c_max;
-            gx > grid_x_max ? grid_x_max = gx : grid_x_max = grid_x_max;
-            gy > grid_y_max ? grid_y_max = gy : grid_y_max = grid_y_max;
-            image_vec.emplace_back(fname, gx, gy, gc);   
-          }
-        }
-      }
-    }
+  auto fp = std::make_unique<FilePattern> (input_dir, pattern);
+  auto files = fp->getFiles();
+
+  for(const auto& [map, values]: files){
+    auto gc = retrieve_val("c", map);
+    auto gx = retrieve_val("x", map);
+    auto gy = retrieve_val("y", map);
+    auto fname = values[0];  
+    gc > grid_c_max ? grid_c_max = gc : grid_c_max = grid_c_max;
+    gx > grid_x_max ? grid_x_max = gx : grid_x_max = grid_x_max;
+    gy > grid_y_max ? grid_y_max = gy : grid_y_max = grid_y_max;
+    image_vec.emplace_back(fname, gx, gy, gc);   
   }
+
   auto t1 = std::chrono::high_resolution_clock::now();
   int num_dims, x_dim, y_dim, c_dim;
 
@@ -91,13 +93,13 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
     c_dim = 1;
     num_dims = 5;
   
-  } else if (v == VisType::TS_Zarr){ // 3D file
+  } else if (v == VisType::NG_Zarr){ // 3D file
     x_dim = 3;
     y_dim = 2;
     c_dim = 0;
     num_dims = 4;
   
-  } else if (v == VisType::TS_NPC ){ // 3D file
+  } else if (v == VisType::PCNG ){ // 3D file
     x_dim = 0;
     y_dim = 1;
     c_dim = 3;
@@ -107,7 +109,7 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
   if (image_vec.size() != 0){
     std::list<tensorstore::WriteFutures> pending_writes;
     size_t write_failed_count = 0;
-    std::string sample_tiff_file = input_dir + "/" + image_vec[0].file_name;
+    std::string sample_tiff_file = image_vec[0].file_name;
     TENSORSTORE_CHECK_OK_AND_ASSIGN(auto test_source, tensorstore::Open(
                     GetOmeTiffSpecToRead(sample_tiff_file),
                     tensorstore::OpenMode::open,
@@ -131,10 +133,10 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
     chunk_shape[y_dim] = _chunk_size_y;
     chunk_shape[x_dim] = _chunk_size_x;
     _data_type_string = test_source.dtype().name();
-    if (v == VisType::TS_Zarr || v == VisType::Viv){
+    if (v == VisType::NG_Zarr || v == VisType::Viv){
       new_image_shape[c_dim] = _num_channels;
       output_spec = GetZarrSpecToWrite(output_file + "/" + scale_key, new_image_shape, chunk_shape, base_zarr_dtype.encoded_dtype);
-    }  else if (v == VisType::TS_NPC){
+    }  else if (v == VisType::PCNG){
       output_spec = GetNPCSpecToWrite(output_file, scale_key, new_image_shape, chunk_shape, 1, _num_channels, test_source.dtype().name(), true);
     }
 
@@ -146,11 +148,11 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
     
     auto t4 = std::chrono::high_resolution_clock::now();
     for(const auto& i: image_vec){        
-      th_pool.push_task([&dest, &input_dir, i, x_dim, y_dim, c_dim, this, &pending_writes, v](){
+      th_pool.push_task([&dest, i, x_dim, y_dim, c_dim, this, &pending_writes, v](){
 
 
         TENSORSTORE_CHECK_OK_AND_ASSIGN(auto source, tensorstore::Open(
-                                    GetOmeTiffSpecToRead(input_dir + "/" + i.file_name),
+                                    GetOmeTiffSpecToRead(i.file_name),
                                     tensorstore::OpenMode::open,
                                     tensorstore::ReadWriteMode::read).result());
 
@@ -167,13 +169,13 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
               array).value();
 
         tensorstore::IndexTransform<> transform = tensorstore::IdentityTransform(dest.domain());
-        if(v == VisType::TS_NPC){
+        if(v == VisType::PCNG){
           transform = (std::move(transform) | tensorstore::Dims("z", "channel").IndexSlice({0, i._c_grid}) 
                                             | tensorstore::Dims(y_dim).SizedInterval(i._y_grid*this->_chunk_size_y, image_height) 
                                             | tensorstore::Dims(x_dim).SizedInterval(i._x_grid*this->_chunk_size_x, image_width)
                                             | tensorstore::Dims(x_dim, y_dim).Transpose({y_dim, x_dim})).value();
 
-        } else if (v == VisType::TS_Zarr){
+        } else if (v == VisType::NG_Zarr){
           transform = (std::move(transform) | tensorstore::Dims(c_dim).SizedInterval(i._c_grid, 1) 
                                             | tensorstore::Dims(y_dim).SizedInterval(i._y_grid*this->_chunk_size_y, image_height) 
                                             | tensorstore::Dims(x_dim).SizedInterval(i._x_grid*this->_chunk_size_x, image_width)).value();

@@ -19,8 +19,8 @@
 
 
 void test_zarr_pyramid_writer(){
-    std::string input_file = "/home/samee/axle/data/r001_c001_z000.ome.tif";
-    std::string output_file = "/home/samee/axle/data/r001_c001_z000_ome_zarr";
+    std::string input_file = "/home/samee/Downloads/WT_Uninfected_top_right.tif";
+    std::string output_file = "/home/samee/axle/data/bia_test";
     
     //input_file = "/home/samee/axle/data/test_image.ome.tif";
     //output_file = "/home/samee/axle/data/test_image_ome_zarr_2";
@@ -28,7 +28,7 @@ void test_zarr_pyramid_writer(){
     auto zpw = OmeTiffToZarrConverter();
     auto t1 = std::chrono::high_resolution_clock::now();
     BS::thread_pool th_pool;
-    zpw.Convert(input_file, output_file, "16", VisType::TS_Zarr ,th_pool);
+    zpw.Convert(input_file, output_file, "16", VisType::Viv ,th_pool);
     auto t2 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> et1 = t2-t1;
     std::cout << "time for base image: "<< et1.count() << std::endl;
@@ -43,7 +43,7 @@ void test_zarr_pyramid_assembler()
     auto zpw = OmeTiffCollToChunked();
     auto t1 = std::chrono::high_resolution_clock::now();
     BS::thread_pool th_pool;
-    zpw.Assemble(input_dir, stitch_vector, output_file, "17", VisType::TS_NPC, th_pool);
+    zpw.Assemble(input_dir, stitch_vector, output_file, "17", VisType::PCNG, th_pool);
 
     auto t2 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> et1 = t2-t1;
@@ -64,25 +64,25 @@ void test_zarr_pyramid_gen(){
 }
 
 void test_ome_tiff_to_zarr_pyramid_gen(){
-    std::string input_tiff_file = "/home/samee/axle/data/r001_c001_z000.ome.tif";
+    std::string input_tiff_file = "/home/samee/Downloads/WT_Uninfected_top_right.tif";
     //input_tiff_file = "/home/samee/axle/data/test_image.ome.tif";
-    std::string output_dir = "/home/samee/axle/data/test_assembly_out";
+    std::string output_dir = "/mnt/hdd8/axle/data/test_assembly_out";
     auto t1 = std::chrono::high_resolution_clock::now();
     auto zarr_pyr_gen = OmeTiffToChunkedPyramid();
-    zarr_pyr_gen.GenerateFromSingleFile(input_tiff_file, output_dir, 1024, VisType::Viv, DSType::Mean);
+    zarr_pyr_gen.GenerateFromSingleFile(input_tiff_file, output_dir, 256, VisType::Viv, DSType::Mean);
     auto t2 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> et1 = t2-t1;
     std::cout << "time for base image: "<< et1.count() << std::endl;
 }
 
 void test_ome_tiff_coll_to_zarr_pyramid_gen(){
-    std::string input_dir = "/home/samee/axle/data/intensity1";
-    std::string stitch_vector = "/home/samee/axle/data/tmp_dir/img-global-positions-1.txt";
+    std::string input_dir = "/mnt/hdd8/axle/data/aaron_test_data";
+    std::string stitch_vector = "x{x:d}_y{y:d}_c{c:d}.ome.tiff";
     std::string image_name = "test_image";
-    std::string output_dir = "/home/samee/axle/data/test_assembly_out";
+    std::string output_dir = "/mnt/hdd8/axle/data/aaron_test_data_out";
     auto t1 = std::chrono::high_resolution_clock::now();
     auto zarr_pyr_gen = OmeTiffToChunkedPyramid();
-    zarr_pyr_gen.GenerateFromCollection(input_dir, stitch_vector, image_name, output_dir, 1024, VisType::TS_NPC, DSType::Mode_Max);
+    zarr_pyr_gen.GenerateFromCollection(input_dir, stitch_vector, image_name, output_dir, 1024, VisType::Viv, DSType::Mode_Max);
     auto t2 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> et1 = t2-t1;
     std::cout << "time for base image: "<< et1.count() << std::endl;
@@ -208,8 +208,8 @@ int main(){
     //test_zarr_pyramid_writer();
     //test_zarr_pyramid_assembler();
     //test_zarr_pyramid_gen();
-    test_ome_tiff_to_zarr_pyramid_gen();
-    //test_ome_tiff_coll_to_zarr_pyramid_gen();
+    //test_ome_tiff_to_zarr_pyramid_gen();
+    test_ome_tiff_coll_to_zarr_pyramid_gen();
     //test_ome_tiff_coll_to_zarr_pyramid_gen_xml();
     //test_npc_write();
     //test_zarr_write();

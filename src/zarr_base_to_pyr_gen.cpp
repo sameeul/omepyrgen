@@ -42,9 +42,9 @@ void ChunkedBaseToPyramid::CreatePyramidImages( const std::string& input_zarr_di
 {
     int resolution = 1; // this gets doubled in each level up
     tensorstore::Spec input_spec{};
-    if (v == VisType::TS_Zarr | v == VisType::Viv){
+    if (v == VisType::NG_Zarr | v == VisType::Viv){
       input_spec = GetZarrSpecToRead(input_zarr_dir, std::to_string(base_level_key));
-    } else if (v == VisType::TS_NPC){
+    } else if (v == VisType::PCNG){
       input_spec = GetNPCSpecToRead(input_zarr_dir, std::to_string(base_level_key));
     }
 
@@ -60,11 +60,11 @@ void ChunkedBaseToPyramid::CreatePyramidImages( const std::string& input_zarr_di
         x_ind = 4;
         y_ind = 3;
     
-    } else if (v == VisType::TS_Zarr){ // 3D file
+    } else if (v == VisType::NG_Zarr){ // 3D file
         x_ind = 3;
         y_ind = 2;
     
-    } else if (v == VisType::TS_NPC ){ // 3D file
+    } else if (v == VisType::PCNG ){ // 3D file
         x_ind = 1;
         y_ind = 0;
     }
@@ -124,22 +124,22 @@ void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_fil
         c_dim = 1;
         num_dims = 5;
     
-    } else if (v == VisType::TS_Zarr){ // 3D file
+    } else if (v == VisType::NG_Zarr){ // 3D file
         x_dim = 3;
         y_dim = 2;
         c_dim = 0;
         num_dims = 4;
     
-    } else if (v == VisType::TS_NPC ){ // 3D file
+    } else if (v == VisType::PCNG ){ // 3D file
         x_dim = 1;
         y_dim = 0;
         c_dim = 3;
         num_dims = 3;
     }
     tensorstore::Spec input_spec{};
-    if (v == VisType::TS_Zarr | v == VisType::Viv){
+    if (v == VisType::NG_Zarr | v == VisType::Viv){
       input_spec = GetZarrSpecToRead(input_file, input_scale_key);
-    } else if (v == VisType::TS_NPC){
+    } else if (v == VisType::PCNG){
       input_spec = GetNPCSpecToRead(input_file, input_scale_key);
     }
     //tensorstore::Context context = Context::Default();
@@ -174,11 +174,11 @@ void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_fil
     tensorstore::Spec output_spec{};
     auto open_mode = tensorstore::OpenMode::create;
 
-    if (v == VisType::TS_Zarr | v == VisType::Viv){
+    if (v == VisType::NG_Zarr | v == VisType::Viv){
       new_image_shape[c_dim] = prev_image_shape[c_dim];
       output_spec = GetZarrSpecToWrite(output_file + "/" + output_scale_key, new_image_shape, chunk_shape, base_zarr_dtype.encoded_dtype);
       open_mode = open_mode | tensorstore::OpenMode::delete_existing;
-    } else if (v == VisType::TS_NPC){
+    } else if (v == VisType::PCNG){
       output_spec = GetNPCSpecToWrite(output_file, output_scale_key, new_image_shape, chunk_shape, resolution, num_channels, store1.dtype().name(), false);
     }
     
@@ -219,10 +219,10 @@ void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_fil
 
                     tensorstore::IndexTransform<> input_transform = tensorstore::IdentityTransform(store1.domain());
                     
-                    if(v == VisType::TS_NPC){
+                    if(v == VisType::PCNG){
                       input_transform = (std::move(input_transform) | tensorstore::Dims(2, 3).IndexSlice({0,c})).value();
                     } else 
-                    if (v == VisType::Viv || v == VisType::TS_Zarr){
+                    if (v == VisType::Viv || v == VisType::NG_Zarr){
                       input_transform = (std::move(input_transform) | tensorstore::Dims(c_dim).SizedInterval(c,1)).value();
                     } 
 
@@ -236,10 +236,10 @@ void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_fil
 
 
                     tensorstore::IndexTransform<> output_transform = tensorstore::IdentityTransform(store2.domain());
-                    if(v == VisType::TS_NPC){
+                    if(v == VisType::PCNG){
                       output_transform = (std::move(output_transform) | tensorstore::Dims(2, 3).IndexSlice({0,c})).value();
                     } else
-                    if (v == VisType::Viv || v == VisType::TS_Zarr){
+                    if (v == VisType::Viv || v == VisType::NG_Zarr){
                       output_transform = (std::move(output_transform) | tensorstore::Dims(c_dim).SizedInterval(c,1)).value();
                     } 
                     output_transform = (std::move(output_transform) | tensorstore::Dims(y_dim).ClosedInterval(y_start, y_end-1) 
