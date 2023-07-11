@@ -93,13 +93,13 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
     c_dim = 1;
     num_dims = 5;
   
-  } else if (v == VisType::TS_Zarr){ // 3D file
+  } else if (v == VisType::NG_Zarr){ // 3D file
     x_dim = 3;
     y_dim = 2;
     c_dim = 0;
     num_dims = 4;
   
-  } else if (v == VisType::TS_NPC ){ // 3D file
+  } else if (v == VisType::PCNG ){ // 3D file
     x_dim = 0;
     y_dim = 1;
     c_dim = 3;
@@ -133,10 +133,10 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
     chunk_shape[y_dim] = _chunk_size_y;
     chunk_shape[x_dim] = _chunk_size_x;
     _data_type_string = test_source.dtype().name();
-    if (v == VisType::TS_Zarr || v == VisType::Viv){
+    if (v == VisType::NG_Zarr || v == VisType::Viv){
       new_image_shape[c_dim] = _num_channels;
       output_spec = GetZarrSpecToWrite(output_file + "/" + scale_key, new_image_shape, chunk_shape, base_zarr_dtype.encoded_dtype);
-    }  else if (v == VisType::TS_NPC){
+    }  else if (v == VisType::PCNG){
       output_spec = GetNPCSpecToWrite(output_file, scale_key, new_image_shape, chunk_shape, 1, _num_channels, test_source.dtype().name(), true);
     }
 
@@ -169,13 +169,13 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
               array).value();
 
         tensorstore::IndexTransform<> transform = tensorstore::IdentityTransform(dest.domain());
-        if(v == VisType::TS_NPC){
+        if(v == VisType::PCNG){
           transform = (std::move(transform) | tensorstore::Dims("z", "channel").IndexSlice({0, i._c_grid}) 
                                             | tensorstore::Dims(y_dim).SizedInterval(i._y_grid*this->_chunk_size_y, image_height) 
                                             | tensorstore::Dims(x_dim).SizedInterval(i._x_grid*this->_chunk_size_x, image_width)
                                             | tensorstore::Dims(x_dim, y_dim).Transpose({y_dim, x_dim})).value();
 
-        } else if (v == VisType::TS_Zarr){
+        } else if (v == VisType::NG_Zarr){
           transform = (std::move(transform) | tensorstore::Dims(c_dim).SizedInterval(i._c_grid, 1) 
                                             | tensorstore::Dims(y_dim).SizedInterval(i._y_grid*this->_chunk_size_y, image_height) 
                                             | tensorstore::Dims(x_dim).SizedInterval(i._x_grid*this->_chunk_size_x, image_width)).value();

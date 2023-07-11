@@ -43,7 +43,7 @@ void OmeTiffToChunkedPyramid::WriteMultiscaleMetadataForSingleFile( const std::s
 {
     std::string tiff_file_name = fs::path(input_file).stem().string();
     std::string zarr_file_dir = output_dir + "/" + tiff_file_name + ".zarr";
-    if(v == VisType::TS_Zarr){
+    if(v == VisType::NG_Zarr){
 
         WriteTSZattrFile(tiff_file_name, zarr_file_dir, min_level, max_level);
     } else if (v == VisType::Viv){
@@ -58,7 +58,7 @@ void OmeTiffToChunkedPyramid::WriteMultiscaleMetadataForImageCollection(const st
                                                                         int min_level, int max_level, VisType v)
 {
     std::string zarr_file_dir = output_dir + "/" + image_file_name + ".zarr";
-    if(v == VisType::TS_Zarr){
+    if(v == VisType::NG_Zarr){
         WriteTSZattrFile(image_file_name, zarr_file_dir, min_level, max_level);
     } else if (v == VisType::Viv){
         _tiff_coll_to_zarr_ptr->GenerateOmeXML(image_file_name, zarr_file_dir+"/METADATA.ome.xml");                   

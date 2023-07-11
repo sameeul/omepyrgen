@@ -31,11 +31,11 @@ void OmeTiffToZarrConverter::Convert( const std::string& input_file, const std::
     x_dim = 4;
     y_dim = 3;
     num_dims = 5;
-  } else if (v == VisType::TS_Zarr ){ // 3D file
+  } else if (v == VisType::NG_Zarr ){ // 3D file
     x_dim = 3;
     y_dim = 2;
     num_dims = 4;
-  } else if (v == VisType::TS_NPC ){ // 3D file
+  } else if (v == VisType::PCNG ){ // 3D file
     x_dim = 0;
     y_dim = 1;
     num_dims = 3;
@@ -64,9 +64,9 @@ void OmeTiffToZarrConverter::Convert( const std::string& input_file, const std::
 
   tensorstore::Spec output_spec{};
   
-  if (v == VisType::TS_Zarr | v == VisType::Viv){
+  if (v == VisType::NG_Zarr | v == VisType::Viv){
     output_spec = GetZarrSpecToWrite(output_file + "/" + scale_key, new_image_shape, chunk_shape, base_zarr_dtype.encoded_dtype);
-  } else if (v == VisType::TS_NPC){
+  } else if (v == VisType::PCNG){
     output_spec = GetNPCSpecToWrite(output_file, scale_key, new_image_shape, chunk_shape, 1, 1, store1.dtype().name(), true);
   }
 
@@ -93,12 +93,12 @@ void OmeTiffToZarrConverter::Convert( const std::string& input_file, const std::
                           array).value();
         
         tensorstore::IndexTransform<> transform = tensorstore::IdentityTransform(store2.domain());
-        if(v == VisType::TS_NPC){
+        if(v == VisType::PCNG){
           transform = (std::move(transform) | tensorstore::Dims(2, 3).IndexSlice({0,0}) 
                                             | tensorstore::Dims(y_dim).ClosedInterval(y_start,y_end-1) 
                                             | tensorstore::Dims(x_dim).ClosedInterval(x_start,x_end-1)
                                             | tensorstore::Dims(x_dim, y_dim).Transpose({y_dim, x_dim})).value();
-        }else if (v == VisType::TS_Zarr || v == VisType::Viv){
+        }else if (v == VisType::NG_Zarr || v == VisType::Viv){
           transform = (std::move(transform) | tensorstore::Dims(y_dim).ClosedInterval(y_start,y_end-1) 
                                             | tensorstore::Dims(x_dim).ClosedInterval(x_start,x_end-1)).value();
         }

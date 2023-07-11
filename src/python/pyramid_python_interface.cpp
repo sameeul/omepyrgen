@@ -10,8 +10,8 @@ PYBIND11_MODULE(libomepyrgen, m) {
     .def("GenerateFromCollection", &OmeTiffToChunkedPyramid::GenerateFromCollection);
 
     py::enum_<VisType>(m, "VisType")
-        .value("TS_Zarr", VisType::TS_Zarr)
-        .value("TS_NPC", VisType::TS_NPC)
+        .value("NG_Zarr", VisType::NG_Zarr)
+        .value("PCNG", VisType::PCNG)
         .value("Viv", VisType::Viv)
         .export_values();
 

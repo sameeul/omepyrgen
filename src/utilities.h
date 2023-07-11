@@ -7,7 +7,7 @@
 #include "tensorstore/tensorstore.h"
 #include "tensorstore/spec.h"
 
-enum VisType {Viv, TS_Zarr, TS_NPC};
+enum VisType {Viv, NG_Zarr, PCNG};
 
 enum class DSType {Mean, Mode_Max, Mode_Min};
 
