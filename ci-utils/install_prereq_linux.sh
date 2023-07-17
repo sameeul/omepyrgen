@@ -14,9 +14,9 @@ fi
 mkdir -p $LOCAL_INSTALL_DIR
 mkdir -p $LOCAL_INSTALL_DIR/include
 
-curl -L https://github.com/sameeul/filepattern/archive/refs/heads/try_cpp_api.zip -o try_cpp_api.zip
-unzip try_cpp_api.zip
-cd filepattern-try_cpp_api/
+curl -L https://github.com/PolusAI/filepattern/archive/refs/heads/master.zip -o filepattern.zip
+unzip filepattern.zip
+cd filepattern-master/
 mkdir build
 cd build
 cmake -Dfilepattern_SHARED_LIB=ON -DCMAKE_PREFIX_PATH=../../$LOCAL_INSTALL_DIR -DCMAKE_INSTALL_PREFIX=../../$LOCAL_INSTALL_DIR ..
