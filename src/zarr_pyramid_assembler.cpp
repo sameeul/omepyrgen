@@ -56,13 +56,6 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
                                     VisType v, 
                                     BS::thread_pool& th_pool)
 {
-  std::regex match_str(
-      "file:\\s(\\S+);[\\s|\\S]+position:\\s\\((\\d+),\\s(\\d+)\\,\\s(\\d+)\\);[\\s|\\S]+grid:\\s\\((\\d+),\\s(\\d+)\\);");
-  
-  
-
-  std::string line;
-  std::smatch pieces_match;
   int grid_x_max = 0, grid_y_max = 0, grid_c_max = 0;
   std::vector<ImageSegment> image_vec;
   _chunk_size_x = 0;
@@ -77,13 +70,13 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
     auto gc = retrieve_val("c", map);
     auto gx = retrieve_val("x", map);
     auto gy = retrieve_val("y", map);
-    auto fname = values[0];  
+    auto fname = values[0].string();  
     gc > grid_c_max ? grid_c_max = gc : grid_c_max = grid_c_max;
     gx > grid_x_max ? grid_x_max = gx : grid_x_max = grid_x_max;
     gy > grid_y_max ? grid_y_max = gy : grid_y_max = grid_y_max;
     image_vec.emplace_back(fname, gx, gy, gc);   
   }
-
+  std::cout <<"Total images found: " << image_vec.size() <<std::endl;
   auto t1 = std::chrono::high_resolution_clock::now();
   int num_dims, x_dim, y_dim, c_dim;
 
