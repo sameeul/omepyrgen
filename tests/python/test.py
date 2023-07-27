@@ -20,7 +20,8 @@ def test_image_collection():
     image_name = "test_image2"
     start_time = time()
     pyr_gen = PyramidGenerartor()
-    pyr_gen.generate_from_image_collection(input_dir, file_pattern, image_name, output_dir, 1024, "Viv", {})
+    pyr_gen.set_log_level(4)
+    pyr_gen.generate_from_image_collection(input_dir, file_pattern, image_name, output_dir, 1024, "Viv")
     end_time = time()
     print(f"elapsed time = {end_time - start_time}")
 

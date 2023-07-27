@@ -18,3 +18,6 @@ class PyramidGenerartor:
         for c in ds_dict:
             channel_ds_dict[c] = self.ds_types_dict[ds_dict[c]]
         self._pyr_generator.GenerateFromCollection(collection_path, pattern , image_name, output_dir, min_dim, self.vis_types_dict[vis_type], channel_ds_dict)
+
+    def set_log_level(self, level):
+        self._pyr_generator.SetLogLevel(level)

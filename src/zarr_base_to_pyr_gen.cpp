@@ -199,12 +199,12 @@ void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_fil
             
             if (it->second == DSType::Mode_Max){
                 downsampling_func_ptr = &DownsampleModeMax;
-                PLOG_INFO<< "Channel ID " << it->first <<" Downsampling method Mode Max";
+                PLOG_DEBUG<< "Channel ID " << it->first <<" Downsampling method Mode Max";
             } else if (it->second == DSType::Mode_Min){
                 downsampling_func_ptr = &DownsampleModeMin;
-                PLOG_INFO<< "Channel ID " << it->first <<" Downsampling method Mode Min";
+                PLOG_DEBUG<< "Channel ID " << it->first <<" Downsampling method Mode Min";
             } else if (it->second == DSType::Mean){
-                PLOG_INFO<< "Channel ID " << it->first <<" Downsampling method Mean";
+                PLOG_DEBUG<< "Channel ID " << it->first <<" Downsampling method Mean";
                 downsampling_func_ptr = &DownsampleAverage;
             } 
         }
