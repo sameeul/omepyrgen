@@ -1,6 +1,8 @@
 #include "zarr_base_to_pyr_gen.h"
 #include "downsample.h"
 #include "utilities.h"
+#include <plog/Log.h>
+#include "plog/Initializers/RollingFileInitializer.h"
 
 #include <string>
 #include <stdint.h>
@@ -37,7 +39,7 @@ void ChunkedBaseToPyramid::CreatePyramidImages( const std::string& input_zarr_di
                                                 int base_level_key,
                                                 int min_dim, 
                                                 VisType v, 
-                                                DSType ds,
+                                                std::unordered_map<std::int64_t, DSType>& channel_ds_config,
                                                 BS::thread_pool& th_pool)
 {
     int resolution = 1; // this gets doubled in each level up
@@ -76,34 +78,34 @@ void ChunkedBaseToPyramid::CreatePyramidImages( const std::string& input_zarr_di
         resolution *= 2;
         switch(data_type){
           case 1:
-            WriteDownsampledImage<uint8_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, ds, th_pool);
+            WriteDownsampledImage<uint8_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, channel_ds_config, th_pool);
             break;
           case 2:
-            WriteDownsampledImage<uint16_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, ds, th_pool);
+            WriteDownsampledImage<uint16_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, channel_ds_config, th_pool);
             break;
           case 4:
-            WriteDownsampledImage<uint32_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, ds, th_pool);
+            WriteDownsampledImage<uint32_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, channel_ds_config, th_pool);
             break;
           case 8:
-            WriteDownsampledImage<uint64_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, ds, th_pool);
+            WriteDownsampledImage<uint64_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, channel_ds_config, th_pool);
             break;
           case 16:
-            WriteDownsampledImage<int8_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, ds, th_pool);
+            WriteDownsampledImage<int8_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, channel_ds_config, th_pool);
             break;
           case 32:
-            WriteDownsampledImage<int16_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, ds, th_pool);
+            WriteDownsampledImage<int16_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, channel_ds_config, th_pool);
             break;
           case 64:
-            WriteDownsampledImage<int32_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, ds, th_pool);
+            WriteDownsampledImage<int32_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, channel_ds_config, th_pool);
             break;
           case 128:
-            WriteDownsampledImage<int64_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, ds, th_pool);
+            WriteDownsampledImage<int64_t>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, channel_ds_config, th_pool);
             break;
           case 256:
-            WriteDownsampledImage<float>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, ds, th_pool);
+            WriteDownsampledImage<float>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, channel_ds_config, th_pool);
             break;
           case 512:
-            WriteDownsampledImage<double>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, ds, th_pool);
+            WriteDownsampledImage<double>(input_zarr_dir, std::to_string(i), output_root_dir, std::to_string(i+1), resolution, v, channel_ds_config, th_pool);
             break;
           default:
             break;
@@ -114,7 +116,9 @@ void ChunkedBaseToPyramid::CreatePyramidImages( const std::string& input_zarr_di
 template <typename T>
 void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_file, const std::string& input_scale_key, 
                                                     const std::string& output_file, const std::string& output_scale_key,
-                                                    int resolution, VisType v, DSType ds, BS::thread_pool& th_pool)
+                                                    int resolution, VisType v, 
+                                                    std::unordered_map<std::int64_t, DSType>& channel_ds_config,
+                                                    BS::thread_pool& th_pool)
 {
     int num_dims, x_dim, y_dim, c_dim;
 
@@ -188,17 +192,22 @@ void ChunkedBaseToPyramid::WriteDownsampledImage(   const std::string& input_fil
                             tensorstore::ReadWriteMode::write).result());
 
     std::unique_ptr<std::vector<T>> (*downsampling_func_ptr)(std::vector<T>&, std::int64_t, std::int64_t);   
-    if (ds == DSType::Mode_Max){
-      downsampling_func_ptr = &DownsampleModeMax;
-    } else if (ds == DSType::Mode_Min){
-      downsampling_func_ptr = &DownsampleModeMin;
-    } else if (ds == DSType::Mean){
-      downsampling_func_ptr = &DownsampleAverage;
-    } else {
-      downsampling_func_ptr = &DownsampleAverage;
-    }
-
+    downsampling_func_ptr = &DownsampleAverage; // default
     for(std::int64_t c=0; c<num_channels; ++c){
+        auto it = channel_ds_config.find(c);
+        if (it != channel_ds_config.end()){
+            
+            if (it->second == DSType::Mode_Max){
+                downsampling_func_ptr = &DownsampleModeMax;
+                PLOG_INFO<< "Channel ID " << it->first <<" Downsampling method Mode Max";
+            } else if (it->second == DSType::Mode_Min){
+                downsampling_func_ptr = &DownsampleModeMin;
+                PLOG_INFO<< "Channel ID " << it->first <<" Downsampling method Mode Min";
+            } else if (it->second == DSType::Mean){
+                PLOG_INFO<< "Channel ID " << it->first <<" Downsampling method Mean";
+                downsampling_func_ptr = &DownsampleAverage;
+            } 
+        }
         for(std::int64_t i=0; i<num_rows; ++i){
             auto y_start = i*chunk_shape[y_dim];
             auto y_end = std::min({(i+1)*chunk_shape[y_dim], cur_y_max});

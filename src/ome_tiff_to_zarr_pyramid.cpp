@@ -9,7 +9,7 @@ using json = nlohmann::json;
 
 void OmeTiffToChunkedPyramid::GenerateFromSingleFile(  const std::string& input_file,
                                                     const std::string& output_dir, 
-                                                    int min_dim, VisType v, DSType ds){
+                                                    int min_dim, VisType v, std::unordered_map<std::int64_t, DSType>& channel_ds_config){
     TIFF *tiff_ = TIFFOpen(input_file.c_str(), "r");
     if (tiff_ != nullptr) {
         uint32_t image_width = 0, image_height = 0;
@@ -27,12 +27,12 @@ void OmeTiffToChunkedPyramid::GenerateFromSingleFile(  const std::string& input_
         int base_level_key = 0;
         auto max_level_key = max_level-min_level+1+base_level_key;
         _zpw_ptr = std::make_unique<OmeTiffToZarrConverter>();
-        std::cout << "Converting base image..."<<std::endl;
+        PLOG_INFO << "Converting base image...";
         _zpw_ptr->Convert(input_file, zarr_file_dir, std::to_string(base_level_key), v, _th_pool);
-        std::cout << "Generating image pyramids..."<<std::endl;
+        PLOG_INFO << "Generating image pyramids...";
         _zpg_ptr = std::make_unique<ChunkedBaseToPyramid>();
-        _zpg_ptr->CreatePyramidImages(zarr_file_dir, zarr_file_dir, 0, min_dim, v, ds, _th_pool);
-        std::cout << "Writing metadata..." << std::endl;
+        _zpg_ptr->CreatePyramidImages(zarr_file_dir, zarr_file_dir, 0, min_dim, v, channel_ds_config, _th_pool);
+        PLOG_INFO << "Writing metadata...";
         WriteMultiscaleMetadataForSingleFile(input_file, output_dir, base_level_key, max_level_key, v);
 
     }
@@ -91,7 +91,7 @@ void OmeTiffToChunkedPyramid::ExtractAndWriteXML(const std::string& input_file, 
             metadata_file << new_pos << std::endl;
         }
         if(!metadata_file){
-            std::cout<<"Unable to write metadata file"<<std::endl;
+            PLOG_INFO << "Unable to write metadata file";
         }
         TIFFClose(tiff_);
     }
@@ -134,7 +134,7 @@ void OmeTiffToChunkedPyramid::WriteTSZattrFile(const std::string& tiff_file_name
     if (f.is_open()){
         f << final_formated_metadata;
     } else {
-        std::cout <<"Unable to write .zattr file at "<< zarr_root_dir << "."<<std::endl;
+        PLOG_INFO <<"Unable to write .zattr file at "<< zarr_root_dir << ".";
     }
 }
 
@@ -174,7 +174,7 @@ void OmeTiffToChunkedPyramid::GenerateFromCollection(
                 const std::string& output_dir, 
                 int min_dim, 
                 VisType v,
-                DSType ds){
+                std::unordered_map<std::int64_t, DSType>& channel_ds_config){
     _tiff_coll_to_zarr_ptr = std::make_unique<OmeTiffCollToChunked>();  
     std::string zarr_file_dir = output_dir + "/" + image_name + ".zarr";
     if (v == VisType::Viv){
@@ -182,15 +182,15 @@ void OmeTiffToChunkedPyramid::GenerateFromCollection(
     }
 
     int base_level_key = 0;
-    std::cout << "Assembling base image..."<<std::endl;
+    PLOG_INFO << "Assembling base image...";
     _tiff_coll_to_zarr_ptr->Assemble(collection_path, stitch_vector_file, zarr_file_dir, std::to_string(base_level_key), v, _th_pool);
     int max_level = static_cast<int>(ceil(log2(std::max({  _tiff_coll_to_zarr_ptr->image_width(), 
                                                         _tiff_coll_to_zarr_ptr->image_height()}))));
     int min_level = static_cast<int>(ceil(log2(min_dim)));
     auto max_level_key = max_level-min_level+1+base_level_key;
-    std::cout << "Generating image pyramids..."<<std::endl;
+    PLOG_INFO << "Generating image pyramids...";
     _zpg_ptr = std::make_unique<ChunkedBaseToPyramid>();
-    _zpg_ptr->CreatePyramidImages(zarr_file_dir, zarr_file_dir,base_level_key, min_dim, v, ds, _th_pool);
-    std::cout << "Writing metadata..." << std::endl;
+    _zpg_ptr->CreatePyramidImages(zarr_file_dir, zarr_file_dir,base_level_key, min_dim, v, channel_ds_config, _th_pool);
+    PLOG_INFO << "Writing metadata...";
     WriteMultiscaleMetadataForImageCollection(image_name, output_dir, base_level_key, max_level_key, v);
 }

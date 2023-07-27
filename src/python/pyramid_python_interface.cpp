@@ -1,6 +1,7 @@
 #include "../ome_tiff_to_zarr_pyramid.h"
 #include "../utilities.h"
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 namespace py = pybind11;
 
 PYBIND11_MODULE(libomepyrgen, m) {

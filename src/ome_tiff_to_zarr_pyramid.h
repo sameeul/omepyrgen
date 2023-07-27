@@ -9,15 +9,20 @@
 #include "zarr_base_to_pyr_gen.h"
 #include "utilities.h"
 #include "BS_thread_pool.hpp"
+#include <plog/Log.h>
+#include "plog/Initializers/RollingFileInitializer.h"
 
 class OmeTiffToChunkedPyramid{
 public:
-    OmeTiffToChunkedPyramid(){}
+    OmeTiffToChunkedPyramid(){
+        auto log_file_name = ::GetUTCString() + ".txt";
+        plog::init(plog::info, log_file_name.c_str());
+    }
     void GenerateFromSingleFile(const std::string& input_file, const std::string& output_dir, 
-                                int min_dim, VisType v, DSType ds);
+                                int min_dim, VisType v, std::unordered_map<std::int64_t, DSType>& channel_ds_config);
     void GenerateFromCollection(const std::string& collection_path, const std::string& stitch_vector_file,
                                 const std::string& image_name, const std::string& output_dir, 
-                                int min_dim, VisType v, DSType ds);
+                                int min_dim, VisType v, std::unordered_map<std::int64_t, DSType>& channel_ds_config);
 
 private:
     std::unique_ptr<OmeTiffToZarrConverter> _zpw_ptr = nullptr;
