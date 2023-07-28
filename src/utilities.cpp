@@ -137,9 +137,13 @@ std::string GetUTCString() {
     char buffer[bufferSize];
     std::tm timeInfo;
 
-    // Use gmtime instead of localtime to get the UTC time
+#if defined(_WIN32)
+    // Use gmtime_s instead of gmtime to get the UTC time on Windows
+    gmtime_s(&timeInfo, &time);
+#else
+    // On other platforms, use the standard gmtime function
     gmtime_r(&time, &timeInfo);
-
+#endif
     // Format the time string (You can modify the format as per your requirements)
     std::strftime(buffer, bufferSize, "%Y%m%d%H%M%S", &timeInfo);
 
