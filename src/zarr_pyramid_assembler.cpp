@@ -2,6 +2,9 @@
 #include "utilities.h"
 #include "pugixml.hpp"
 #include "tiffio.h"
+#include <plog/Log.h>
+#include "plog/Initializers/RollingFileInitializer.h"
+
 #include <fstream>
 #include <iostream>
 #include <regex>
@@ -76,7 +79,7 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
     gy > grid_y_max ? grid_y_max = gy : grid_y_max = grid_y_max;
     image_vec.emplace_back(fname, gx, gy, gc);   
   }
-  std::cout <<"Total images found: " << image_vec.size() <<std::endl;
+  PLOG_INFO << "Total images found: " << image_vec.size() <<std::endl;
   auto t1 = std::chrono::high_resolution_clock::now();
   int num_dims, x_dim, y_dim, c_dim;
 
@@ -148,7 +151,7 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
                                     GetOmeTiffSpecToRead(i.file_name),
                                     tensorstore::OpenMode::open,
                                     tensorstore::ReadWriteMode::read).result());
-
+        PLOG_INFO << "Opening "<< i.file_name;
         auto image_shape = source.domain().shape();
         auto image_width = image_shape[4];
         auto image_height = image_shape[3];
@@ -192,7 +195,7 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
         if (it->commit_future.ready()) {
           if (!tensorstore::GetStatus(it->commit_future).ok()) {
             write_failed_count++;
-            std::cout << tensorstore::GetStatus(it->commit_future);
+            PLOG_ERROR <<  tensorstore::GetStatus(it->commit_future);
           }
           count++;
           it = pending_writes.erase(it);

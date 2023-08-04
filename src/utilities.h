@@ -35,3 +35,4 @@ tensorstore::Spec GetNPCSpecToWrite(const std::string& filename,
 
 
 uint16_t GetDataTypeCode (std::string_view type_name);
+std::string GetUTCString();

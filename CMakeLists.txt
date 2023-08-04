@@ -43,6 +43,7 @@ FetchContent_MakeAvailable(tensorstore)
 # Define a target that depends on TensorStore...
 
 include_directories(lib/pugixml)
+include_directories(lib/plog/include)
 include_directories(lib/bs_threadpool)
 target_link_libraries(
   test_pyrgen
