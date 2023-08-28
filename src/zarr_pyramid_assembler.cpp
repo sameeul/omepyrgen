@@ -103,7 +103,7 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
   }
 
   if (image_vec.size() != 0){
-    std::list<tensorstore::WriteFutures> pending_writes;
+    //std::list<tensorstore::WriteFutures> pending_writes;
     size_t write_failed_count = 0;
     std::string sample_tiff_file = image_vec[0].file_name;
     TENSORSTORE_CHECK_OK_AND_ASSIGN(auto test_source, tensorstore::Open(
@@ -144,7 +144,7 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
     
     auto t4 = std::chrono::high_resolution_clock::now();
     for(const auto& i: image_vec){        
-      th_pool.push_task([&dest, i, x_dim, y_dim, c_dim, this, &pending_writes, v](){
+      th_pool.push_task([&dest, i, x_dim, y_dim, c_dim, this, v](){
 
 
         TENSORSTORE_CHECK_OK_AND_ASSIGN(auto source, tensorstore::Open(
@@ -180,38 +180,11 @@ void OmeTiffCollToChunked::Assemble(const std::string& input_dir,
                                             | tensorstore::Dims(y_dim).SizedInterval(i._y_grid*this->_chunk_size_y, image_height) 
                                             | tensorstore::Dims(x_dim).SizedInterval(i._x_grid*this->_chunk_size_x, image_width)).value();
         }
-
-        pending_writes.emplace_back(tensorstore::Write(array, dest | transform));
+        tensorstore::Write(array, dest | transform).value();
       });
     }
 
     th_pool.wait_for_tasks();
-
-    size_t total_writes = pending_writes.size(); 
-
-    size_t count = 0, num_pass = 10;
-    while( num_pass > 0){
-      for (auto it = pending_writes.begin(); it != pending_writes.end();) {
-        if (it->commit_future.ready()) {
-          if (!tensorstore::GetStatus(it->commit_future).ok()) {
-            write_failed_count++;
-            PLOG_ERROR <<  tensorstore::GetStatus(it->commit_future);
-          }
-          count++;
-          it = pending_writes.erase(it);
-        } else {
-          ++it;
-        }
-      }
-      --num_pass;
-    }
-
-    // force the rest of it to finish
-    for (auto& front : pending_writes) {
-      if (!tensorstore::GetStatus(front.commit_future).ok()) {
-        write_failed_count++;
-      }
-    }
   }
 }
 
